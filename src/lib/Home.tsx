@@ -1,28 +1,28 @@
 import { normalizeProps, useMachine } from '@zag-js/solid'
 import * as splitter from '@zag-js/splitter'
-import { createMemo, createUniqueId } from 'solid-js'
-import { Motion } from 'solid-motionone'
+import { createMemo, createSignal, createUniqueId } from 'solid-js'
 
+import { A } from '@solidjs/router'
+import Chat from '../Chat'
 import './App.css'
 
 export default function App() {
+  const [expanded, setExpanded] = createSignal(false)
+
   const service = useMachine(splitter.machine, {
     id: createUniqueId(),
     orientation: 'horizontal',
     defaultSize: [
-      { id: 'a', size: 50, minSize: 10, maxSize: 90 },
-      { id: 'b', size: 50, minSize: 10, maxSize: 90 },
+      { id: 'a', size: 20, minSize: 10, maxSize: 30 },
+      { id: 'b', size: 60, minSize: 40, maxSize: 80 },
+      { id: 'c', size: 20, minSize: 10, maxSize: 30 },
     ],
   })
 
   const api = createMemo(() => splitter.connect(service, normalizeProps))
 
-  const expandLeftPanel = () => {
-    api().setToMinSize('b')
-  }
-
-  const collapseLeftPanel = () => {
-    api().setToMinSize('a')
+  const togglePanel = () => {
+    setExpanded((prev) => !prev)
   }
 
   return (
@@ -30,47 +30,45 @@ export default function App() {
       <header class="bg-indigo-600 text-white p-4 shadow-md flex justify-between items-center">
         <h1 class="text-2xl font-bold">Split Pane Demo</h1>
         <div class="flex gap-2">
-          <button onClick={expandLeftPanel} class="bg-white text-indigo-600 px-4 py-2 rounded-md hover:bg-indigo-100 transition-colors font-medium">
-            Expand Left Panel
-          </button>
-          <button onClick={collapseLeftPanel} class="bg-white text-indigo-600 px-4 py-2 rounded-md hover:bg-indigo-100 transition-colors font-medium">
-            Collapse Left Panel
+          <A href="/settings" class="inline-block bg-indigo-600 text-white px-6 py-3 rounded-md hover:bg-indigo-700 transition-colors font-medium">
+            Settings
+          </A>
+          <button onClick={togglePanel} class="bg-white text-indigo-600 px-4 py-2 rounded-md hover:bg-indigo-100 transition-colors font-medium">
+            {expanded() ? 'Hide' : 'Show'} Sidebar
           </button>
         </div>
       </header>
 
       <div class="flex flex-row flex-1 overflow-hidden" {...api().getRootProps()}>
-        <Motion.div
-          animate={{ flex: service.context.get('size')[0].size }}
-          transition={{ duration: 1, easing: 'ease-in-out' }}
-          class="overflow-auto p-4 bg-white"
-          {...api().getPanelProps({ id: 'a' })}
-        >
+        <div class="overflow-auto p-4 bg-white" {...api().getPanelProps({ id: 'a' })}>
           <div class="h-full rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
             <div class="text-center">
               <h2 class="text-xl font-semibold text-gray-700">Left Panel</h2>
               <p class="text-gray-500 mt-2">Content for panel A goes here</p>
             </div>
           </div>
-        </Motion.div>
+        </div>
 
         <div class="w-1.5 bg-gray-200 hover:bg-indigo-400 transition-colors cursor-col-resize flex items-center justify-center" {...api().getResizeTriggerProps({ id: 'a:b' })}>
           <div class="w-0.5 h-8 bg-gray-400"></div>
         </div>
 
-        <Motion.div
-          animate={{ flex: service.context.get('size')[1].size }}
-          transition={{ duration: 1, easing: 'ease-in-out' }}
-          class="overflow-auto p-4 bg-white"
-          {...api().getPanelProps({ id: 'b' })}
-        >
+        <div class="overflow-auto bg-white" {...api().getPanelProps({ id: 'b' })}>
+          <Chat />
+        </div>
+
+        <div class="w-1.5 bg-gray-200 hover:bg-indigo-400 transition-colors cursor-col-resize flex items-center justify-center" {...api().getResizeTriggerProps({ id: 'b:c' })}>
+          <div class="w-0.5 h-8 bg-gray-400"></div>
+        </div>
+
+        <div class="overflow-auto p-4 bg-white" {...api().getPanelProps({ id: 'c' })}>
           <div class="h-full rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
             <div class="text-center">
               <h2 class="text-xl font-semibold text-gray-700">Right Panel</h2>
-              <p class="text-gray-500 mt-2">Content for panel B goes here</p>
+              <p class="text-gray-500 mt-2">Content for panel C goes here</p>
             </div>
           </div>
-        </Motion.div>
+        </div>
       </div>
     </div>
   )

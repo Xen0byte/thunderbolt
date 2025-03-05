@@ -2,13 +2,9 @@ import { normalizeProps, useMachine } from '@zag-js/solid'
 import * as splitter from '@zag-js/splitter'
 import { createMemo, createSignal, createUniqueId } from 'solid-js'
 
-import './App.css'
 import Chat from './Chat'
-import { createTray } from './lib/tray'
 
-export default function App() {
-  createTray()
-
+export default function Home() {
   const [expanded, setExpanded] = createSignal(false)
 
   const service = useMachine(splitter.machine, {
