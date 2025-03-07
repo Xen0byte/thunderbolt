@@ -127,6 +127,8 @@ async fn get_or_create_stronghold_password(
     // In release mode, use the keyring
     #[cfg(not(debug_assertions))]
     {
+        use keyring::Entry;
+
         // Try to load existing password from system keyring
         match Entry::new(&service_name, &username) {
             Ok(entry) => match entry.get_password() {
