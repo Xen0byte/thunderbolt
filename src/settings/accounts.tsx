@@ -4,6 +4,7 @@ import { createForm, required } from '@modular-forms/solid'
 import { Button } from '@/components/button'
 import { Card, CardContent } from '@/components/card'
 import { Input } from '@/components/input'
+import { setSetting } from '@/lib/commands'
 import { createResource, createSignal, Show, Suspense } from 'solid-js'
 
 type AccountForm = {
@@ -26,8 +27,10 @@ export default function AccountsSettings() {
   })
 
   const [data] = createResource(formValues, async (formValues: AccountForm) => {
-    // Simulate a network request with a delay
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    for (const key in formValues) {
+      const value = formValues[key as keyof AccountForm]
+      await setSetting(key, value.toString())
+    }
 
     console.log('setting data', formValues)
 
