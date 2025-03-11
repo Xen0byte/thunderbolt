@@ -1,49 +1,44 @@
 import { Field as ArkField } from '@ark-ui/solid'
-import { createForm, getValues, required, reset } from '@modular-forms/solid'
+import { createForm, required, reset } from '@modular-forms/solid'
 
 import { Button } from '@/components/button'
 import { Card, CardContent } from '@/components/card'
-import { useDrizzle } from '@/components/drizzle'
 import { Input } from '@/components/input'
-import { getSettings, setSettings } from '@/dal'
-import { Settings } from '@/types'
-import { createEffect, createResource } from 'solid-js'
+import { useSettings } from '@/components/settings'
+import { AccountsSettings } from '@/types'
+import { createEffect } from 'solid-js'
 
-type AccountSettings = Pick<Settings, 'hostname' | 'port' | 'username' | 'password'>
+export default function AccountsSettingsPage() {
+  const { settings, set } = useSettings()
 
-export default function AccountsSettings() {
-  const context = useDrizzle()
-
-  const [formStore, { Form, Field }] = createForm<AccountSettings>({
-    initialValues: {
-      hostname: '127.0.0.1',
-      port: 3000,
-      username: 'admin',
-      password: 'admin',
-    },
+  const [formStore, { Form, Field }] = createForm<AccountsSettings>({
+    initialValues: settings.account,
   })
-
-  const [initialSettings] = createResource<AccountSettings>(() => getSettings<AccountSettings>(context.db, ['hostname', 'port', 'username', 'password']))
 
   createEffect(() => {
-    reset(formStore, {
-      initialValues: initialSettings(),
-    })
+    if (settings) {
+      reset(formStore, {
+        initialValues: {
+          hostname: '',
+          port: 3000,
+          username: '',
+          password: '',
+          ...settings.account,
+        },
+      })
+    }
   })
 
-  const [submitData] = createResource(
-    () => formStore.submitCount || null,
-    async () => {
-      await setSettings(context.db, getValues(formStore))
-    }
-  )
+  const handleSubmit = async (values: AccountsSettings) => {
+    await set('account', values)
+  }
 
   return (
     <>
       <div class="flex flex-col gap-4 p-4 max-w-[800px]">
         <Card>
           <CardContent>
-            <Form class="flex flex-col gap-4">
+            <Form onSubmit={handleSubmit} class="flex flex-col gap-4">
               <Field name="hostname" validate={[required('Hostname is required.')]}>
                 {(field, props) => {
                   console.log(props, field)

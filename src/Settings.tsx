@@ -8,10 +8,20 @@ export default function Settings({ children }: { children?: JSXElement }) {
   return (
     <>
       <Sidebar>
-        <Button as={A} href="/" variant="outline">
-          <ArrowLeft class="size-4" />
-          Home
-        </Button>
+        <div class="flex flex-col gap-4">
+          <Button as={A} href="/" variant="outline">
+            <ArrowLeft class="size-4" />
+            Home
+          </Button>
+          <div class="flex flex-col gap-2">
+            <Button as={A} href="/settings/accounts" variant="ghost" class="justify-start">
+              Accounts
+            </Button>
+            <Button as={A} href="/settings/models" variant="ghost" class="justify-start">
+              Models
+            </Button>
+          </div>
+        </div>
       </Sidebar>
       <div class="flex flex-col gap-4 p-4 w-full">{children}</div>
     </>

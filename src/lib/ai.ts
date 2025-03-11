@@ -70,14 +70,8 @@ export const ollama = createOpenAI({
 export const aiFetchStreamingResponse = async (_requestInfoOrUrl: RequestInfo | URL, init: RequestInit = {}) => {
   // _requestInfoOrUrl is not used, but is required by fetch. The OpenAI wrapper handles the URL For us.
 
-  const apiKey = await invoke<string | undefined>('get_openai_api_key')
-
-  if (!apiKey) {
-    throw new Error('No OpenAI API key found')
-  }
-
   const openai = createOpenAI({
-    apiKey,
+    apiKey: '', // @todo
   })
 
   const options = init as RequestInit & { body: string }
@@ -120,7 +114,7 @@ export const aiFetchStreamingResponse = async (_requestInfoOrUrl: RequestInfo | 
           query: z.string().describe("The query to search the user's inbox with."),
           originalUserMessage: z.string().describe('The original user message that triggered this tool call.'),
         }),
-        execute: async ({ query, originalUserMessage }) => {
+        execute: async () => {
           const messages = await invoke<EmailMessage[]>('fetch_inbox_top', { count: 50 })
           console.log('messages', messages)
           return messages.map(

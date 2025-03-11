@@ -1,22 +1,27 @@
 import { Route, Router } from '@solidjs/router'
 import { createSignal, onMount, Show } from 'solid-js'
+import { render } from 'solid-js/web'
 import { DrizzleProvider } from './components/drizzle'
+import { SettingsProvider } from './components/settings'
 import { initializeDrizzleDatabase } from './db/database'
+import { migrate } from './db/migrate'
 import Home from './home'
 import Layout from './layout'
 import { createAppDataDir } from './lib/fs'
 import { createTray } from './lib/tray'
 import NotFound from './not-found'
 import Settings from './settings'
-import AccountsSettings from './settings/accounts'
+import AccountsSettingsPage from './settings/accounts'
+import ModelsSettingsPage from './settings/models'
 import { DrizzleContextType } from './types'
-import { render } from 'solid-js/web'
 
 const init = async () => {
   createTray()
   createAppDataDir()
 
   const { db, sqlite } = await initializeDrizzleDatabase()
+
+  await migrate({ sqlite })
 
   return {
     db,
@@ -71,18 +76,16 @@ export const App = () => {
   return (
     <Show when={context()} fallback={<div>Loading...</div>}>
       <DrizzleProvider context={context()!}>
-        <Router root={Layout}>
-          <Route path="/" component={Home} />
-          <Route path="/settings" component={Settings}>
-            <Route
-              path="/accounts"
-              component={() => {
-                return <AccountsSettings />
-              }}
-            />
-          </Route>
-          <Route path="*404" component={NotFound} />
-        </Router>
+        <SettingsProvider key="main">
+          <Router root={Layout}>
+            <Route path="/" component={Home} />
+            <Route path="/settings" component={Settings}>
+              <Route path="/accounts" component={AccountsSettingsPage} />
+              <Route path="/models" component={ModelsSettingsPage} />
+            </Route>
+            <Route path="*404" component={NotFound} />
+          </Router>
+        </SettingsProvider>
       </DrizzleProvider>
     </Show>
   )
