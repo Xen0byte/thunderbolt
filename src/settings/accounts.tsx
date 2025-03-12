@@ -1,87 +1,106 @@
-import { Field as ArkField } from '@ark-ui/solid'
-import { createForm, required } from '@modular-forms/solid'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
 
-import { Button } from '@/components/button'
-import { Card, CardContent } from '@/components/card'
-import { Input } from '@/components/input'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
 import { useSettings } from '@/settings/provider'
 import { AccountsSettings } from '@/types'
+
+const formSchema = z.object({
+  hostname: z.string().min(1, { message: 'Hostname is required.' }),
+  port: z.coerce.number().int().min(1, { message: 'Port is required.' }),
+  username: z.string().min(1, { message: 'Username is required.' }),
+  password: z.string().min(1, { message: 'Password is required.' }),
+})
 
 export default function AccountsSettingsPage() {
   const { settings, setSettings } = useSettings()
 
-  const [formStore, { Form, Field }] = createForm<AccountsSettings>({
-    initialValues: {
-      hostname: '',
-      port: 3000,
-      username: '',
-      password: '',
-      ...settings.account,
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      hostname: settings.account?.hostname || '',
+      port: settings.account?.port || 3000,
+      username: settings.account?.username || '',
+      password: settings.account?.password || '',
     },
   })
 
-  const handleSubmit = async (values: AccountsSettings) => {
+  const onSubmit = (values: z.infer<typeof formSchema>) => {
     setSettings({
       ...settings,
-      account: values,
+      account: values as AccountsSettings,
     })
   }
 
   return (
     <>
-      <div class="flex flex-col gap-4 p-4 max-w-[800px]">
+      <div className="flex flex-col gap-4 p-4 max-w-[800px]">
         <Card>
           <CardContent>
-            <Form onSubmit={handleSubmit} class="flex flex-col gap-4">
-              <Field name="hostname" validate={[required('Hostname is required.')]}>
-                {(field, props) => {
-                  return (
-                    <ArkField.Root>
-                      <ArkField.Label>Hostname</ArkField.Label>
-                      <Input {...props} value={field.value} />
-                      {/* <ArkField.HelperText>Some additional Info</ArkField.HelperText> */}
-                      {field.error && <ArkField.ErrorText>{field.error}</ArkField.ErrorText>}
-                    </ArkField.Root>
-                  )
-                }}
-              </Field>
-              <Field type="number" name="port" validate={[required('Port is required.')]}>
-                {(field, props) => {
-                  return (
-                    <ArkField.Root>
-                      <ArkField.Label>Port</ArkField.Label>
-                      <Input {...props} value={field.value} type="number" />
-                      {field.error && <ArkField.ErrorText>{field.error}</ArkField.ErrorText>}
-                    </ArkField.Root>
-                  )
-                }}
-              </Field>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+                <FormField
+                  control={form.control}
+                  name="hostname"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Hostname</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <Field name="username" validate={[required('Username is required.')]}>
-                {(field, props) => {
-                  return (
-                    <ArkField.Root>
-                      <ArkField.Label>Username</ArkField.Label>
-                      <Input {...props} value={field.value} />
-                      {field.error && <ArkField.ErrorText>{field.error}</ArkField.ErrorText>}
-                    </ArkField.Root>
-                  )
-                }}
-              </Field>
+                <FormField
+                  control={form.control}
+                  name="port"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Port</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <Field name="password" validate={[required('Password is required.')]}>
-                {(field, props) => {
-                  return (
-                    <ArkField.Root>
-                      <ArkField.Label>Password</ArkField.Label>
-                      <Input {...props} value={field.value} type="password" />
-                      {field.error && <ArkField.ErrorText>{field.error}</ArkField.ErrorText>}
-                    </ArkField.Root>
-                  )
-                }}
-              </Field>
+                <FormField
+                  control={form.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Username</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <Button type="submit">Save</Button>
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button type="submit">Save</Button>
+              </form>
             </Form>
           </CardContent>
         </Card>

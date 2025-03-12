@@ -1,42 +1,43 @@
-import ChatUI from '@/components/chat/ChatUI'
+import ChatUI from '@/components/chat/chat-ui'
 import { aiFetchStreamingResponse } from '@/lib/ai'
-import { useChat } from '@ai-sdk/solid'
+import { useChat } from '@ai-sdk/react'
 import { LanguageModelResponseMetadata, Message } from 'ai'
-import { createMemo, Show } from 'solid-js'
 
 interface ChatProps {
   apiKey: string
   initialMessages: () => any[]
   maxSteps?: number
-  onFinish?: (response: LanguageModelResponseMetadata & { readonly messages: Array<Message> }) => Promise<void> | void
+  onFinish?: (response: LanguageModelResponseMetadata & { readonly messages: Message[] }) => void
 }
 
 export default function Chat({ apiKey, initialMessages, maxSteps = 5, onFinish }: ChatProps) {
-  const chatHelpers = createMemo(() => {
-    return useChat({
-      initialMessages: initialMessages(),
-      fetch: (_requestInfoOrUrl, init) => {
-        if (!apiKey) {
-          throw new Error('No API key found')
-        }
+  const messages = initialMessages()
 
-        if (!init) {
-          throw new Error('No init found')
-        }
+  const chatHelpers = useChat({
+    initialMessages: messages,
+    fetch: (_requestInfoOrUrl: RequestInfo | URL, init?: RequestInit) => {
+      if (!apiKey) {
+        throw new Error('No API key found')
+      }
 
-        return aiFetchStreamingResponse({
-          apiKey,
-          init,
-          onFinish,
-        })
-      },
-      maxSteps,
-    })
+      if (!init) {
+        throw new Error('No init found')
+      }
+
+      return aiFetchStreamingResponse({
+        apiKey,
+        init,
+        onFinish: (response) => {
+          onFinish?.(response)
+        },
+      })
+    },
+    maxSteps,
   })
 
-  return (
-    <Show when={initialMessages()} fallback={<div>Loading chat...</div>}>
-      <ChatUI chatHelpers={chatHelpers} />
-    </Show>
-  )
+  if (!messages) {
+    return <div>Loading chat...</div>
+  }
+
+  return <ChatUI chatHelpers={chatHelpers} />
 }

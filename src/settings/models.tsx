@@ -1,49 +1,59 @@
-import { Field as ArkField } from '@ark-ui/solid'
-import { createForm, required } from '@modular-forms/solid'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
 
-import { Button } from '@/components/button'
-import { Card, CardContent } from '@/components/card'
-import { Input } from '@/components/input'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
 import { useSettings } from '@/settings/provider'
 import { ModelsSettings } from '@/types'
 
-export default function ModelsSettingsPage() {
-  const context = useSettings()
+const formSchema = z.object({
+  openai_api_key: z.string().min(1, { message: 'OpenAI API Key is required.' }),
+})
 
-  const [formStore, { Form, Field }] = createForm<ModelsSettings>({
-    initialValues: {
-      openai_api_key: '',
-      ...context.settings.models,
+export default function ModelsSettingsPage() {
+  const { settings, setSettings } = useSettings()
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      openai_api_key: settings.models?.openai_api_key || '',
     },
   })
 
-  const handleSubmit = async (values: ModelsSettings) => {
-    context.setSettings({
-      ...context.settings,
-      models: values,
+  const onSubmit = (values: z.infer<typeof formSchema>) => {
+    setSettings({
+      ...settings,
+      models: values as ModelsSettings,
     })
   }
 
   return (
     <>
-      <div class="flex flex-col gap-4 p-4 max-w-[800px]">
+      <div className="flex flex-col gap-4 p-4 max-w-[800px]">
         <Card>
           <CardContent>
-            <Form onSubmit={handleSubmit} class="flex flex-col gap-4">
-              <Field name="openai_api_key" validate={[required('OpenAI API Key is required.')]}>
-                {(field, props) => {
-                  return (
-                    <ArkField.Root class="flex flex-col gap-1.5">
-                      <ArkField.Label class="font-medium text-sm">OpenAI API Key</ArkField.Label>
-                      <Input {...props} value={field.value} type="password" placeholder="OpenAI API Key" />
-                      {field.error && <div class="text-xs text-red-500">{field.error}</div>}
-                    </ArkField.Root>
-                  )
-                }}
-              </Field>
-              <Button type="submit" class="w-full">
-                Save
-              </Button>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+                <FormField
+                  control={form.control}
+                  name="openai_api_key"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>OpenAI API Key</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="OpenAI API Key" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" className="w-full">
+                  Save
+                </Button>
+              </form>
             </Form>
           </CardContent>
         </Card>

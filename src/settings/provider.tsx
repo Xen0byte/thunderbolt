@@ -1,47 +1,71 @@
-import { createContext, createResource, JSX, Show, useContext } from 'solid-js'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { createContext, ReactNode, useContext } from 'react'
 
 import { getSettings as dalGetSettings, setSettings as dalSetSettings } from '@/dal'
+import { useDrizzle } from '@/db/provider'
 import { Settings } from '@/types'
-import { useDrizzle } from '../components/drizzle'
 
 type SettingsContextType = {
   settings: Settings
   setSettings: (updatedSettings: Settings) => Promise<void>
+  isLoading: boolean
 }
 
-const SettingsContext = createContext<SettingsContextType>()
+const SettingsContext = createContext<SettingsContextType | undefined>(undefined)
 
-export function SettingsProvider(props: { key: string; children: JSX.Element }) {
+export function SettingsProvider(props: { section: string; children: ReactNode }) {
   const drizzleContext = useDrizzle()
+  const queryClient = useQueryClient()
 
-  const [settings, { mutate, refetch }] = createResource<Settings>(async () => {
-    const obj = await dalGetSettings<any>(drizzleContext.db, props.key)
-    return obj
+  const settingsQueryKey = ['settings', props.section]
+
+  const { data: settings, isLoading } = useQuery({
+    queryKey: settingsQueryKey,
+    queryFn: async () => {
+      return await dalGetSettings<Settings>(drizzleContext.db, props.section)
+    },
   })
 
-  const setSettings = async (updatedSettings: Settings) => {
-    try {
-      mutate(updatedSettings)
-      await dalSetSettings(drizzleContext.db, props.key, updatedSettings)
-    } catch (error) {
-      refetch()
-      console.error(error)
-    }
+  const { mutateAsync } = useMutation({
+    mutationFn: async (updatedSettings: Settings) => {
+      await dalSetSettings(drizzleContext.db, props.section, updatedSettings)
+      return updatedSettings
+    },
+    onMutate: async (updatedSettings) => {
+      await queryClient.cancelQueries({ queryKey: settingsQueryKey })
+      const previousSettings = queryClient.getQueryData(settingsQueryKey)
+      queryClient.setQueryData(settingsQueryKey, updatedSettings)
+      return { previousSettings }
+    },
+    onError: (err, newSettings, context) => {
+      if (context?.previousSettings) {
+        queryClient.setQueryData(settingsQueryKey, context.previousSettings)
+      }
+      console.error(err)
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: settingsQueryKey })
+    },
+  })
+
+  const setSettings = async (updatedSettings: Settings): Promise<void> => {
+    await mutateAsync(updatedSettings)
+  }
+
+  if (isLoading || !settings) {
+    return null
   }
 
   return (
-    <Show when={settings()}>
-      <SettingsContext.Provider
-        value={{
-          get settings() {
-            return settings()!
-          },
-          setSettings,
-        }}
-      >
-        {props.children}
-      </SettingsContext.Provider>
-    </Show>
+    <SettingsContext.Provider
+      value={{
+        settings,
+        setSettings,
+        isLoading,
+      }}
+    >
+      {props.children}
+    </SettingsContext.Provider>
   )
 }
 

@@ -1,29 +1,30 @@
-import { A } from '@solidjs/router'
-import { ArrowLeft } from 'lucide-solid'
-import { JSXElement } from 'solid-js'
-import { Button } from './components/button'
+import { ArrowLeft } from 'lucide-react'
+import { Link } from 'react-router'
 import { Sidebar } from './components/sidebar'
+import { Button } from './components/ui/button'
 
-export default function UiKitPage({ children }: { children?: JSXElement }) {
+export default function UiKitPage() {
   return (
     <>
       <Sidebar>
-        <div class="flex flex-col gap-4">
-          <Button as={A} href="/" variant="outline">
-            <ArrowLeft class="size-4" />
-            Home
+        <div className="flex flex-col gap-4">
+          <Button asChild variant="outline">
+            <Link to="/">
+              <ArrowLeft className="size-4" />
+              Home
+            </Link>
           </Button>
-          <div class="flex flex-col gap-2">
-            <Button as={A} href="/settings/accounts" variant="ghost" class="justify-start">
-              Accounts
+          <div className="flex flex-col gap-2">
+            <Button asChild variant="ghost" className="justify-start">
+              <Link to="/settings/accounts">Accounts</Link>
             </Button>
-            <Button as={A} href="/settings/models" variant="ghost" class="justify-start">
-              Models
+            <Button asChild variant="ghost" className="justify-start">
+              <Link to="/settings/models">Models</Link>
             </Button>
           </div>
         </div>
       </Sidebar>
-      <div class="flex flex-col gap-4 p-4 w-full">Hello</div>
+      <div className="flex flex-col gap-4 p-4 w-full">Hello</div>
     </>
   )
 }

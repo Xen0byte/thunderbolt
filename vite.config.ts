@@ -1,8 +1,8 @@
 import tailwindcss from '@tailwindcss/vite'
+import react from '@vitejs/plugin-react'
 import path from 'path'
 import { defineConfig } from 'vite'
 import { analyzer } from 'vite-bundle-analyzer'
-import solid from 'vite-plugin-solid'
 import { bundleMigrations } from './src/db/bundle-migrations'
 
 const host = process.env.TAURI_DEV_HOST
@@ -20,7 +20,7 @@ export default defineConfig(async () => ({
       },
     },
     tailwindcss(),
-    solid(),
+    react(),
     analyzer({
       analyzerMode: 'static',
     }),
