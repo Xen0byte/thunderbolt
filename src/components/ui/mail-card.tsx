@@ -63,13 +63,13 @@ export function MailCard(props: MailCardProps) {
               </div>
             </>
           )}
-
-          {props.footer && (
-            <div className="px-4 py-3">
-              <div className="flex flex-wrap items-center gap-2 justify-start">{props.footer}</div>
-            </div>
-          )}
         </div>
+
+        {props.footer && (
+          <div className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2 justify-start">{props.footer}</div>
+          </div>
+        )}
       </div>
     </div>
   )

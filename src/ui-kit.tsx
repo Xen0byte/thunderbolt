@@ -113,6 +113,7 @@ export default function UiKitPage() {
           example.pdf
         </Button>
         <Button>Default Button</Button>
+        <Button variant="ghost">Ghost Button</Button>
         <div className="h-px bg-gray-200 dark:bg-gray-700 my-10" />
         <h2 className="text-2xl font-bold">Mail Card List</h2>
         <MailCardList>
