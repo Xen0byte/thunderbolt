@@ -42,6 +42,7 @@ export default function ChatUI({ chatHelpers }: ChatUIProps) {
       <div className="border-t border-gray-200 p-4 bg-white">
         <form onSubmit={chatHelpers.handleSubmit} className="flex gap-2">
           <input
+            autoFocus
             value={chatHelpers.input}
             onChange={chatHelpers.handleInputChange}
             placeholder="Say something..."

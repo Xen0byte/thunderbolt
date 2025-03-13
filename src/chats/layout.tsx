@@ -22,13 +22,13 @@ export function ChatLayout() {
   const createChatMutation = useMutation({
     mutationFn: async () => {
       const chatThreadId = uuidv7()
-      return db.insert(chatThreadsTable).values({ id: chatThreadId, title: 'New Chat' }).returning()
+      // @todo libsql will throw an error that "execute returned rows" if we try to do returning()
+      await db.insert(chatThreadsTable).values({ id: chatThreadId, title: 'New Chat' })
+      return chatThreadId
     },
-    onSuccess: (data) => {
+    onSuccess: (chatThreadId) => {
       queryClient.invalidateQueries({ queryKey: ['chatThreads'] })
-      if (data && data[0]) {
-        navigate(`/chats/${data[0].id}`)
-      }
+      navigate(`/chats/${chatThreadId}`)
     },
   })
 
