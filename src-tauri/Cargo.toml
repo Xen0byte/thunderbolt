@@ -17,7 +17,7 @@ name = "mozilla_assist_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [workspace]
-members = ["assist_imap_client"]
+members = ["assist_imap_client", "assist_imap_sync"]
 
 [[bin]]
 name = "mozilla-assist"
@@ -48,23 +48,23 @@ name = "summarize-many"
 path = "examples/summarize-many.rs"
 
 [build-dependencies]
-tauri-build = { version = "2", features = ["isolation"] }
+tauri-build = { version = "2.0.6", features = ["isolation"] }
 
 # Common dependencies (no Metal features)
 [dependencies]
-tauri = { version = "2", features = ["isolation", "tray-icon"] }
-tauri-plugin-opener = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+tauri = { version = "2.3.1", features = ["isolation", "tray-icon"] }
+tauri-plugin-opener = "2.2.6"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
 imap = "3.0.0-alpha.15"
 native-tls = "0.2.14"
 dotenv = "0.15.0"
-hf-hub = "0.4.1"
-tokenizers = "0.21.0"
-anyhow = "1.0.96"
-tokio = "1.43.0"
+hf-hub = "0.4.2"
+tokenizers = "0.21.1"
+anyhow = "1.0.97"
+tokio = "1.44.1"
 chrono = { version = "0.4.39", features = ["serde"] }
-html2text = "0.14.0"
+html2text = "0.14.2"
 # Base versions without Metal for all platforms
 candle-nn = { version = "0.8.3", features = ["metal"] }
 candle-core = { version = "0.8.3", features = ["metal"] }
@@ -75,7 +75,7 @@ mistralrs = { git = "https://github.com/EricLBuehler/mistral.rs.git", rev = "e2f
 tauri-plugin-devtools = "2.0.0"
 tauri-plugin-http = "2"
 tokio-stream = "0.1.17"
-http = "1.2.0"
+http = "1.3.1"
 tauri-plugin-process = "2"
 regex = "1.11.1"
 keyring = { version = "3.6.2", features = [
@@ -86,10 +86,11 @@ keyring = { version = "3.6.2", features = [
 tauri-plugin-fs = "2"
 libsql = { version = "0.6.0", features = ["encryption"] }
 base64 = "0.22.1"
-indexmap = "2.7.1"
+indexmap = "2.8.0"
 bytes = "1.10.1"
 mail-parser = { version = "0.10.2", features = ["serde_support"] }
 assist_imap_client = { path = "./assist_imap_client" }
+assist_imap_sync = { path = "./assist_imap_sync" }
 
 [profile.dev]
 incremental = true # Compile your binary in smaller steps.

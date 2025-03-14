@@ -5,6 +5,7 @@ import * as schema from './db/schema'
 import { chatMessagesTable, chatThreadsTable, settingsTable } from './db/schema'
 import ImapClient from './imap/imap'
 import Database from './lib/libsql'
+import { ImapSyncClient } from './sync'
 import { Settings as SettingsType } from './types'
 
 export type InitData = {
@@ -12,6 +13,7 @@ export type InitData = {
   sqlite: Database
   settings: SettingsType
   imap: ImapClient
+  imapSync: ImapSyncClient
 }
 
 export type ChatMessagePart = TextUIPart | ReasoningUIPart | ToolInvocationUIPart | SourceUIPart

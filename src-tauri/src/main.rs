@@ -6,6 +6,8 @@ mod state;
 
 use anyhow::Result;
 use assist_imap_client::{messages_to_json_values, ImapClient, ImapCredentials};
+use assist_imap_sync::ImapSync;
+use chrono::{DateTime, Utc};
 use mozilla_assist_lib::settings::get_settings;
 use serde_json;
 use std::env;
@@ -52,10 +54,10 @@ async fn init_imap(app_handle: tauri::AppHandle) -> Result<(), String> {
 
     // Create ImapCredentials from account settings
     let credentials = ImapCredentials {
-        hostname: account_settings.hostname,
+        hostname: account_settings.hostname.clone(),
         port: account_settings.port,
-        username: account_settings.username,
-        password: account_settings.password,
+        username: account_settings.username.clone(),
+        password: account_settings.password.clone(),
     };
 
     // Create IMAP client
@@ -66,8 +68,60 @@ async fn init_imap(app_handle: tauri::AppHandle) -> Result<(), String> {
         .connect()
         .map_err(|e| format!("Failed to connect to IMAP server: {}", e))?;
 
-    // Store client directly without Arc
+    // Store client in state
     state.imap_client = Some(imap_client);
+
+    Ok(())
+}
+
+#[command]
+async fn init_imap_sync(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let state = app_handle.state::<Mutex<AppState>>();
+    let mut state = state.lock().await;
+
+    // Check if IMAP client is initialized
+    if state.imap_client.is_none() {
+        return Err("IMAP client not initialized. Call init_imap first.".to_string());
+    }
+
+    // Check if database connection is initialized
+    if state.libsql.is_none() {
+        return Err("Database not initialized. Call init_libsql first.".to_string());
+    }
+
+    // Get settings to create a new IMAP client for the sync service
+    let conn = state.libsql.as_mut().unwrap();
+
+    // Get settings
+    let settings = get_settings(conn)
+        .await
+        .map_err(|e| format!("Failed to get settings: {}", e))?;
+
+    // Check if account settings exist
+    let account_settings = settings
+        .account
+        .ok_or_else(|| "Account settings not found".to_string())?;
+
+    // Create a new IMAP client for the sync service
+    let sync_credentials = ImapCredentials {
+        hostname: account_settings.hostname,
+        port: account_settings.port,
+        username: account_settings.username,
+        password: account_settings.password,
+    };
+    let sync_imap_client = ImapClient::new(sync_credentials);
+
+    // Connect the sync client
+    sync_imap_client
+        .connect()
+        .map_err(|e| format!("Failed to connect sync client: {}", e))?;
+
+    // Get a clone of the database connection for the sync service
+    let db_conn = state.libsql.as_ref().unwrap().clone();
+
+    // Create the ImapSync instance using the existing database connection
+    let imap_sync = ImapSync::new(sync_imap_client, db_conn);
+    state.imap_sync = Some(imap_sync);
 
     Ok(())
 }
@@ -108,7 +162,7 @@ async fn fetch_inbox(
 
     // Fetch inbox messages
     let messages = imap_client
-        .fetch_inbox(count)
+        .fetch_inbox("INBOX", None, count)
         .map_err(|e| format!("Failed to fetch inbox: {}", e))?;
 
     // Process all messages using the utility function
@@ -118,6 +172,50 @@ async fn fetch_inbox(
     // Convert the processed messages to a single JSON value
     serde_json::to_value(&processed_messages)
         .map_err(|e| format!("Failed to serialize messages: {}", e))
+}
+
+#[command]
+async fn sync_mailbox(
+    app_handle: tauri::AppHandle,
+    mailbox: String,
+    page_size: usize,
+    since: Option<String>,
+) -> Result<usize, String> {
+    // Clone the app handle to avoid lifetime issues
+    let app_handle = app_handle.clone();
+
+    // Spawn a tokio task to handle the sync
+    let result = tokio::spawn(async move {
+        let state = app_handle.state::<Mutex<AppState>>();
+        let state_guard = state.lock().await;
+
+        // Get sync client
+        let sync_client = state_guard
+            .imap_sync
+            .as_ref()
+            .ok_or_else(|| "IMAP sync not initialized. Call init_imap first.".to_string())?;
+
+        // Parse the since date if provided
+        let since_date = if let Some(since_str) = since {
+            Some(
+                DateTime::parse_from_rfc3339(&since_str)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .map_err(|e| format!("Failed to parse date: {}", e))?,
+            )
+        } else {
+            None
+        };
+
+        // Sync the mailbox
+        sync_client
+            .sync_mailbox(&mailbox, page_size, since_date)
+            .await
+            .map_err(|e| format!("Failed to sync mailbox: {}", e))
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?;
+
+    result
 }
 
 #[tokio::main]
@@ -140,8 +238,10 @@ async fn main() -> Result<()> {
             libsql::execute,
             libsql::select,
             init_imap,
+            init_imap_sync,
             fetch_inbox,
-            list_mailboxes
+            list_mailboxes,
+            sync_mailbox
         ]);
 
     #[cfg(debug_assertions)]

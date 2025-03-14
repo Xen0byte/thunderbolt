@@ -12,7 +12,7 @@ export const toolset = {
       originalUserMessage: z.string().describe('The original user message that triggered this tool call.'),
     }),
     execute: async () => {
-      const messages = await invoke<ParsedEmail[]>('fetch_inbox', { count: 3 })
+      const messages = await invoke<ParsedEmail[]>('fetch_inbox', { mailbox: 'INBOX', count: 3 })
       console.log('messages', messages)
       return messages.map(
         (message) => `

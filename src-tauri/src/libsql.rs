@@ -190,3 +190,52 @@ pub async fn select(
 
     Ok(results)
 }
+
+/// Initialize a libsql database connection for internal use
+pub async fn init_libsql_internal(
+    path: &str,
+    encryption_key: Option<String>,
+) -> Result<libsql::Connection, String> {
+    println!(
+        "🚀 ~ init_libsql_internal: {:?}, {:?}",
+        path, encryption_key
+    );
+
+    let fqdb = path.to_string();
+
+    // Ensure directory exists
+    if let Some(parent) = std::path::PathBuf::from(&fqdb).parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Problem creating directory: {}", e))?;
+    }
+
+    let mut builder = libsql::Builder::new_local(&fqdb);
+
+    // Apply encryption configuration if key is provided
+    if let Some(key) = encryption_key {
+        println!("🚀 ~ key: {}", key);
+
+        let cipher = libsql::Cipher::Aes256Cbc;
+        let encryption_key_bytes = bytes::Bytes::from(key);
+
+        let encryption_config = libsql::EncryptionConfig {
+            cipher,
+            encryption_key: encryption_key_bytes,
+        };
+
+        builder = builder.encryption_config(encryption_config);
+    } else {
+        println!("No encryption key provided...");
+    }
+
+    let database = builder
+        .build()
+        .await
+        .map_err(|e| format!("Failed to build database: {}", e))?;
+
+    let conn = database
+        .connect()
+        .map_err(|e| format!("Failed to connect to database: {}", e))?;
+
+    Ok(conn)
+}

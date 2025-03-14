@@ -114,36 +114,48 @@ impl ImapClient {
         Ok(result)
     }
 
-    /// Fetch messages from the inbox
-    pub fn fetch_inbox(&self, count: Option<usize>) -> Result<Vec<mail_parser::Message>> {
+    /// Fetch messages from a specific mailbox
+    pub fn fetch_inbox(
+        &self,
+        mailbox: &str,
+        start_index: Option<usize>,
+        count: Option<usize>,
+    ) -> Result<Vec<mail_parser::Message>> {
         self.connect()?;
 
         let mut session_guard = self.session.lock().unwrap();
         let mut result = Vec::new();
 
         if let Some(ref mut session) = *session_guard {
-            session.select("INBOX")?;
+            session.select(mailbox)?;
 
-            // Get the total number of messages in the inbox
-            let status = session.status("INBOX", "(MESSAGES)")?;
+            // Get the total number of messages in the mailbox
+            let status = session.status(mailbox, "(MESSAGES)")?;
             let total_messages = status.exists as usize;
 
-            // If inbox is empty, return empty result
+            // If mailbox is empty, return empty result
             if total_messages == 0 {
                 return Ok(Vec::new());
             }
 
-            // Calculate the actual range to fetch
+            // Calculate the range to fetch
             let requested_count = count.unwrap_or(10);
-            let actual_count = std::cmp::min(requested_count, total_messages);
+            let start = start_index.unwrap_or_else(|| {
+                if requested_count >= total_messages {
+                    1
+                } else {
+                    total_messages - requested_count + 1
+                }
+            });
+
+            // Ensure start is valid (not beyond total)
+            let start = std::cmp::min(start, total_messages);
+
+            // Calculate end index
+            let end = std::cmp::min(start + requested_count - 1, total_messages);
 
             // Create the fetch range
-            let fetch_range = if actual_count == total_messages {
-                format!("1:{}", total_messages)
-            } else {
-                // Get the most recent messages
-                format!("{}:{}", total_messages - actual_count + 1, total_messages)
-            };
+            let fetch_range = format!("{}:{}", start, end);
 
             let messages = session.fetch(&fetch_range, "RFC822")?;
 

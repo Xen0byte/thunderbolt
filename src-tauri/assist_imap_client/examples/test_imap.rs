@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Fetch inbox messages
     println!("\nFetching inbox messages...");
-    let messages = client.fetch_inbox(Some(5))?;
+    let messages = client.fetch_inbox("INBOX", None, Some(5))?;
     println!("Fetched {} messages from inbox", messages.len());
 
     // Convert messages to JSON
