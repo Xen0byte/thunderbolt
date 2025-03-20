@@ -1,7 +1,6 @@
 use anyhow::Result;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use bytes::Bytes;
-use indexmap::IndexMap;
 use libsql::{Cipher, EncryptionConfig, Value};
 use serde_json::Value as JsonValue;
 use tauri::{command, State};
@@ -148,7 +147,7 @@ pub async fn select(
     state: State<'_, Mutex<AppState>>,
     query: String,
     values: Vec<JsonValue>,
-) -> Result<Vec<IndexMap<String, JsonValue>>, String> {
+) -> Result<Vec<Vec<JsonValue>>, String> {
     let mut state = state.lock().await;
 
     let conn = state
@@ -177,16 +176,15 @@ pub async fn select(
         .await
         .map_err(|e| format!("Failed to fetch row: {}", e))?
     {
-        let mut value = IndexMap::new();
-        for i in 0..row.column_count() {
-            let column_name = row.column_name(i).unwrap_or_default().to_string();
-            let v = match row.get::<Value>(i) {
+        let mut row_values = Vec::with_capacity(row.column_count() as usize);
+        for i in 0..(row.column_count() as usize) {
+            let v = match row.get::<libsql::Value>(i as i32) {
                 Ok(v) => value_to_json(v),
                 Err(_) => JsonValue::Null,
             };
-            value.insert(column_name, v);
+            row_values.push(v);
         }
-        results.push(value);
+        results.push(row_values);
     }
 
     Ok(results)

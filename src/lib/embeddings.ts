@@ -34,49 +34,19 @@ export async function getEmbedding(text: string): Promise<number[]> {
  */
 export async function search(db: DrizzleContextType['db'], searchText: string, limit: number = 5): Promise<any[]> {
   try {
-    // Get embedding for the search text
     const embedding = await getEmbedding(searchText)
-    // console.log('aaaa')
 
-    // Use vector_distance_cos for similarity search
-    // const queryResult = await db
-    //   .select({
-    //     subject: sql<string>`e.subject`,
-    //     text_body: sql<string>`e.text_body`,
-    //     date: sql<string>`e.date`,
-    //     from: sql<string>`e."from"`,
-    //     distance: sql<number>`vector_distance_cos(emb.embedding, vector32(${JSON.stringify(embedding)}))`,
-    //   })
-    //   .from(
-    //     sql`embeddings emb
-    //     JOIN email_messages e ON e.id = emb.email_message_id`
-    //   )
-    //   // .orderBy(sql`distance`)
-    //   .limit(limit)
-
-    await db.run(sql`
-      CREATE INDEX IF NOT EXISTS embeddings_test_index ON embeddings (libsql_vector_idx(embedding));
-    `)
-
-    const y = await db
+    const results = await db
       .select({
-        embedding_id: embeddingsTable.id,
-        email_message_id: sql`${emailMessagesTable}.id`.as('email_message_id'),
         distance: sql`vector_distance_cos(${embeddingsTable.embedding}, vector32(${JSON.stringify(embedding)}))`.as('distance'),
-
-        id: sql`${emailMessagesTable}.id`,
-        subject: emailMessagesTable.subject,
-        text_body: emailMessagesTable.text_body,
-        date: emailMessagesTable.date,
-        from: emailMessagesTable.from,
+        email_message: emailMessagesTable,
       })
       .from(sql`vector_top_k('embeddings_test_index', vector32(${JSON.stringify(embedding)}), ${limit}) as r`)
       .leftJoin(embeddingsTable, sql`${embeddingsTable}.rowid = r.id`)
       .leftJoin(emailMessagesTable, eq(emailMessagesTable.id, sql`email_message_id`))
       .orderBy(sql`distance ASC`)
 
-    console.log('wtf', y)
-    return y
+    return results
   } catch (error) {
     console.error('Failed to search similar messages:', error)
     throw error

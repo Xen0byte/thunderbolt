@@ -33,11 +33,10 @@ export async function migrate({ sqlite }: { sqlite: Database }) {
   await sqlite.execute(migrationTableCreate, [])
 
   // Get current migrations from database
-  const dbMigrations = (await sqlite.select(/*sql*/ `SELECT id, hash, created_at FROM "__drizzle_migrations" ORDER BY created_at DESC`)) as unknown as {
-    id: number
-    hash: string
-    created_at: number
-  }[]
+  const rows: [id: number, hash: string, created_at: number][] = await sqlite.select(/*sql*/ `SELECT id, hash, created_at FROM "__drizzle_migrations" ORDER BY created_at DESC`)
+
+  // Convert the rows to a more usable format
+  const dbMigrations = rows.map(([id, hash, created_at]) => ({ id, hash, created_at }))
 
   const hasBeenRun = (hash: string) =>
     dbMigrations.find((dbMigration) => {

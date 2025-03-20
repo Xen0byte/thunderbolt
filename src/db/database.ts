@@ -40,10 +40,6 @@ export const initializeDrizzleDatabase = async () => {
         return { rows: [] }
       }
 
-      rows = rows.map((row: any) => {
-        return Object.values(row)
-      })
-
       // If the method is "all", return all rows
       results = method === 'all' ? rows : rows[0]
 

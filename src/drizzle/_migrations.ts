@@ -1,6 +1,6 @@
 /**
  * This file is auto-generated. Do not edit directly.
- * Generated on: 2025-03-20T00:20:39.298Z
+ * Generated on: 2025-03-20T21:47:35.045Z
  */
 
 export interface Migration {
@@ -29,5 +29,10 @@ export const migrations: Migration[] = [
     "hash": "0003_first_exiles",
     "name": "0003_first_exiles.sql",
     "sql": "ALTER TABLE `embeddings` DROP COLUMN `created_at`;"
+  },
+  {
+    "hash": "0004_dizzy_war_machine",
+    "name": "0004_dizzy_war_machine.sql",
+    "sql": "-- Custom SQL migration file, put your code below! --\n\nCREATE INDEX IF NOT EXISTS embeddings_test_index ON embeddings (libsql_vector_idx(embedding));"
   }
 ];

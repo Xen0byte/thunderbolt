@@ -4458,7 +4458,6 @@ dependencies = [
  "html2text",
  "http 1.3.1",
  "imap",
- "indexmap 2.8.0",
  "keyring",
  "libsql",
  "mail-parser",
