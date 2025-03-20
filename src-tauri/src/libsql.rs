@@ -1,9 +1,7 @@
 use anyhow::Result;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use bytes::Bytes;
-use libsql::{Cipher, EncryptionConfig, Value};
+use libsql::Value;
 use serde_json::Value as JsonValue;
-use std::sync::Arc;
 use tauri::{command, State};
 use tokio::sync::Mutex;
 
@@ -64,17 +62,17 @@ pub async fn init_libsql(
 ) -> Result<(), String> {
     println!("🚀 ~ init_libsql: {:?}, {:?}", path, encryption_key);
 
-    let fqdb = path.clone();
-    let pool_size = pool_size.unwrap_or(4); // Default to 4 connections if not specified
+    // This is required - we need to clone/extract the data we need
+    let pool_size = pool_size.unwrap_or(4);
 
-    // Create the connection pool
-    let db_pool = DbPool::new(&fqdb, encryption_key, pool_size)
+    // Initialize the database and create the pool
+    let db_pool = DbPool::new(&path, encryption_key, pool_size)
         .await
         .map_err(|e| format!("Failed to build database pool: {}", e))?;
 
-    // Store connection in state
-    let mut state = state.lock().await;
-    state.db_pool = Some(db_pool);
+    // Store connection in state - do this directly, not in a spawned task
+    let mut state_guard = state.inner().lock().await;
+    state_guard.db_pool = Some(db_pool);
 
     Ok(())
 }
@@ -86,38 +84,46 @@ pub async fn execute(
     query: String,
     values: Vec<JsonValue>,
 ) -> Result<(u64, i64), String> {
-    let state = state.lock().await;
+    // Get a reference to the pool and create a database connection
+    let database = {
+        let state_guard = state.inner().lock().await;
+        match &state_guard.db_pool {
+            Some(pool) => pool.get_database().clone(),
+            None => return Err("Database not initialized".to_string()),
+        }
+    };
 
-    // Get a connection from the pool
-    let pool = state
-        .db_pool
-        .as_ref()
-        .ok_or_else(|| "Database not initialized".to_string())?;
+    // Create a connection specifically for this operation
+    let conn = database
+        .connect()
+        .map_err(|e| format!("Failed to create connection: {}", e))?;
 
-    let conn = pool.get_connection().await;
-    let mut conn_guard = conn.lock().await;
+    // Spawn a tokio task to handle the operation with the independently created connection
+    tokio::spawn(async move {
+        let mut stmt = conn
+            .prepare(&query)
+            .await
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-    let mut stmt = conn_guard
-        .prepare(&query)
-        .await
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+        // Create parameter values from JSON
+        let params =
+            create_params(&values).map_err(|e| format!("Failed to create parameters: {}", e))?;
 
-    // Create parameter values from JSON
-    let params =
-        create_params(&values).map_err(|e| format!("Failed to create parameters: {}", e))?;
+        // Pass params directly, not as reference
+        let affected = stmt
+            .execute(params)
+            .await
+            .map_err(|e| format!("Failed to execute statement: {}", e))?;
 
-    // Pass params directly, not as reference
-    let affected = stmt
-        .execute(params)
-        .await
-        .map_err(|e| format!("Failed to execute statement: {}", e))?;
+        // libsql just returns the count as usize, no result object
+        // We'll use 0 for last_insert_id (or implement another query to get it)
+        let rows_affected = affected as u64;
+        let last_insert_id = 0; // Would need separate "SELECT last_insert_rowid()" to get this
 
-    // libsql just returns the count as usize, no result object
-    // We'll use 0 for last_insert_id (or implement another query to get it)
-    let rows_affected = affected as u64;
-    let last_insert_id = 0; // Would need separate "SELECT last_insert_rowid()" to get this
-
-    Ok((rows_affected, last_insert_id))
+        Ok((rows_affected, last_insert_id))
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[command]
@@ -126,48 +132,56 @@ pub async fn select(
     query: String,
     values: Vec<JsonValue>,
 ) -> Result<Vec<Vec<JsonValue>>, String> {
-    let state = state.lock().await;
-
-    // Get a connection from the pool
-    let pool = state
-        .db_pool
-        .as_ref()
-        .ok_or_else(|| "Database not initialized".to_string())?;
-
-    let conn = pool.get_connection().await;
-    let mut conn_guard = conn.lock().await;
-
-    let mut stmt = conn_guard
-        .prepare(&query)
-        .await
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-    // Create parameter values from JSON
-    let params =
-        create_params(&values).map_err(|e| format!("Failed to create parameters: {}", e))?;
-
-    // Pass params directly, not as reference
-    let mut rows = stmt
-        .query(params)
-        .await
-        .map_err(|e| format!("Failed to execute query: {}", e))?;
-
-    let mut results = Vec::new();
-    while let Some(row) = rows
-        .next()
-        .await
-        .map_err(|e| format!("Failed to fetch row: {}", e))?
-    {
-        let mut row_values = Vec::with_capacity(row.column_count() as usize);
-        for i in 0..(row.column_count() as usize) {
-            let v = match row.get::<libsql::Value>(i as i32) {
-                Ok(v) => value_to_json(v),
-                Err(_) => JsonValue::Null,
-            };
-            row_values.push(v);
+    // Get a reference to the pool and create a database connection
+    let database = {
+        let state_guard = state.inner().lock().await;
+        match &state_guard.db_pool {
+            Some(pool) => pool.get_database().clone(),
+            None => return Err("Database not initialized".to_string()),
         }
-        results.push(row_values);
-    }
+    };
 
-    Ok(results)
+    // Create a connection specifically for this operation
+    let conn = database
+        .connect()
+        .map_err(|e| format!("Failed to create connection: {}", e))?;
+
+    // Spawn a tokio task to handle the operation with the independently created connection
+    tokio::spawn(async move {
+        let mut stmt = conn
+            .prepare(&query)
+            .await
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+        // Create parameter values from JSON
+        let params =
+            create_params(&values).map_err(|e| format!("Failed to create parameters: {}", e))?;
+
+        // Pass params directly, not as reference
+        let mut rows = stmt
+            .query(params)
+            .await
+            .map_err(|e| format!("Failed to execute query: {}", e))?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| format!("Failed to fetch row: {}", e))?
+        {
+            let mut row_values = Vec::with_capacity(row.column_count() as usize);
+            for i in 0..(row.column_count() as usize) {
+                let v = match row.get::<libsql::Value>(i as i32) {
+                    Ok(v) => value_to_json(v),
+                    Err(_) => JsonValue::Null,
+                };
+                row_values.push(v);
+            }
+            results.push(row_values);
+        }
+
+        Ok(results)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }

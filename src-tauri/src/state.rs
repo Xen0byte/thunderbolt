@@ -1,9 +1,6 @@
+use crate::db_pool::DbPool;
 use assist_imap_client::ImapClient;
 use assist_imap_sync::ImapSync;
-use libsql::Connection;
-use tokio::sync::Mutex as TokioMutex;
-
-use crate::db_pool::DbPool;
 
 #[derive(Default)]
 pub struct AppState {

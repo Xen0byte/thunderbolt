@@ -35,11 +35,12 @@ async fn toggle_dock_icon(app_handle: tauri::AppHandle, show: bool) -> Result<()
 
 #[command]
 async fn init_imap(app_handle: tauri::AppHandle) -> Result<(), String> {
+    // Access state directly
     let state = app_handle.state::<Mutex<AppState>>();
-    let mut state = state.lock().await;
+    let mut state_guard = state.lock().await;
 
     // Get database connection
-    let pool = state
+    let pool = state_guard
         .db_pool
         .as_ref()
         .ok_or_else(|| "Database not initialized".to_string())?;
@@ -75,28 +76,29 @@ async fn init_imap(app_handle: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Failed to connect to IMAP server: {}", e))?;
 
     // Store client in state
-    state.imap_client = Some(imap_client);
+    state_guard.imap_client = Some(imap_client);
 
     Ok(())
 }
 
 #[command]
 async fn init_imap_sync(app_handle: tauri::AppHandle) -> Result<(), String> {
+    // Access state directly
     let state = app_handle.state::<Mutex<AppState>>();
-    let mut state = state.lock().await;
+    let mut state_guard = state.lock().await;
 
     // Check if IMAP client is initialized
-    if state.imap_client.is_none() {
+    if state_guard.imap_client.is_none() {
         return Err("IMAP client not initialized. Call init_imap first.".to_string());
     }
 
     // Check if database connection is initialized
-    if state.db_pool.is_none() {
+    if state_guard.db_pool.is_none() {
         return Err("Database not initialized. Call init_libsql first.".to_string());
     }
 
     // Get settings to create a new IMAP client for the sync service
-    let pool = state.db_pool.as_ref().unwrap();
+    let pool = state_guard.db_pool.as_ref().unwrap();
     let conn = pool.get_connection().await;
     let mut conn_guard = conn.lock().await;
 
@@ -131,18 +133,19 @@ async fn init_imap_sync(app_handle: tauri::AppHandle) -> Result<(), String> {
 
     // Create the ImapSync instance using the database connection
     let imap_sync = ImapSync::new(sync_imap_client, db_conn);
-    state.imap_sync = Some(imap_sync);
+    state_guard.imap_sync = Some(imap_sync);
 
     Ok(())
 }
 
 #[command]
 async fn list_mailboxes(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    // Access state directly
     let state = app_handle.state::<Mutex<AppState>>();
-    let state = state.lock().await;
+    let state_guard = state.lock().await;
 
     // Get IMAP client
-    let imap_client = state
+    let imap_client = state_guard
         .imap_client
         .as_ref()
         .ok_or_else(|| "IMAP client not initialized. Call init_imap first.".to_string())?;
@@ -161,11 +164,12 @@ async fn fetch_inbox(
     app_handle: tauri::AppHandle,
     count: Option<usize>,
 ) -> Result<serde_json::Value, String> {
+    // Access state directly
     let state = app_handle.state::<Mutex<AppState>>();
-    let state = state.lock().await;
+    let state_guard = state.lock().await;
 
     // Get IMAP client
-    let imap_client = state
+    let imap_client = state_guard
         .imap_client
         .as_ref()
         .ok_or_else(|| "IMAP client not initialized. Call init_imap first.".to_string())?;
@@ -233,24 +237,34 @@ async fn generate_embeddings(
     app_handle: tauri::AppHandle,
     batch_size: usize,
 ) -> Result<usize, String> {
-    let state = app_handle.state::<Mutex<AppState>>();
-    let state = state.lock().await;
+    // Clone the app handle to avoid lifetime issues
+    let app_handle = app_handle.clone();
 
-    // Get database connection based on what's available
-    if let Some(pool) = &state.db_pool {
-        // Create a dedicated connection for this potentially long-running operation
-        let conn = pool
-            .get_database()
-            .connect()
-            .map_err(|e| format!("Failed to create connection for embeddings: {}", e))?;
+    // Spawn a tokio task to handle the embedding generation
+    let result = tokio::spawn(async move {
+        let state = app_handle.state::<Mutex<AppState>>();
+        let state = state.lock().await;
 
-        // Generate embeddings for all messages
-        assist_embeddings::generate_all(&conn, batch_size)
-            .await
-            .map_err(|e| format!("Failed to generate embeddings: {}", e))
-    } else {
-        Err("Database not initialized".to_string())
-    }
+        // Get database connection based on what's available
+        if let Some(pool) = &state.db_pool {
+            // Create a dedicated connection for this potentially long-running operation
+            let conn = pool
+                .get_database()
+                .connect()
+                .map_err(|e| format!("Failed to create connection for embeddings: {}", e))?;
+
+            // Generate embeddings for all messages
+            assist_embeddings::generate_all(&conn, batch_size)
+                .await
+                .map_err(|e| format!("Failed to generate embeddings: {}", e))
+        } else {
+            Err("Database not initialized".to_string())
+        }
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?;
+
+    result
 }
 
 #[command]
