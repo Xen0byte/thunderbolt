@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 export default function GenerateEmbeddingsSection() {
   const { db } = useDrizzle()
   const [isGenerating, setIsGenerating] = useState<boolean>(false)
-  const [batchSize, setBatchSize] = useState<number>(10)
+  const [batchSize, setBatchSize] = useState<number>(1)
   const [status, setStatus] = useState<string>('')
   const [progress, setProgress] = useState<{ processed: number; total: number }>({ processed: 0, total: 0 })
   const indexerRef = useRef<Indexer | null>(null)
@@ -24,6 +24,7 @@ export default function GenerateEmbeddingsSection() {
   const [maxBatchTime, setMaxBatchTime] = useState<number>(5000) // 5 seconds default
   const [slowBatches, setSlowBatches] = useState<Array<{ batchNumber: number; time: number; emails: EmailMessage[] }>>([])
   const [currentOffset, setCurrentOffset] = useState<number>(0)
+  const [slowMessages, setSlowMessages] = useState<string[]>([])
 
   useEffect(() => {
     // Initialize the indexer
@@ -38,6 +39,14 @@ export default function GenerateEmbeddingsSection() {
             total: status.messageCount,
             processed: status.embeddingsCount,
           })
+
+          // Update debug info
+          setSlowMessages(status.debug.slowMessages)
+          if (status.debug.totalEmbeddingsProcessed > 0) {
+            setTotalEmbeddingTime(status.debug.totalEmbeddingTime)
+            setTotalEmbeddingsProcessed(status.debug.totalEmbeddingsProcessed)
+            setAverageTimePerEmbedding(status.debug.totalEmbeddingTime / status.debug.totalEmbeddingsProcessed)
+          }
         }
       } catch (error) {
         console.error('Error fetching counts:', error)
@@ -75,6 +84,14 @@ export default function GenerateEmbeddingsSection() {
             total: status.messageCount,
             processed: status.embeddingsCount,
           })
+
+          // Update debug info
+          setSlowMessages(status.debug.slowMessages)
+          if (status.debug.totalEmbeddingsProcessed > 0) {
+            setTotalEmbeddingTime(status.debug.totalEmbeddingTime)
+            setTotalEmbeddingsProcessed(status.debug.totalEmbeddingsProcessed)
+            setAverageTimePerEmbedding(status.debug.totalEmbeddingTime / status.debug.totalEmbeddingsProcessed)
+          }
 
           if (!status.isIndexing) {
             clearInterval(monitoringInterval)
@@ -114,6 +131,14 @@ export default function GenerateEmbeddingsSection() {
         total: status.messageCount,
         processed: status.embeddingsCount,
       })
+
+      // Update debug info
+      setSlowMessages(status.debug.slowMessages)
+      if (status.debug.totalEmbeddingsProcessed > 0) {
+        setTotalEmbeddingTime(status.debug.totalEmbeddingTime)
+        setTotalEmbeddingsProcessed(status.debug.totalEmbeddingsProcessed)
+        setAverageTimePerEmbedding(status.debug.totalEmbeddingTime / status.debug.totalEmbeddingsProcessed)
+      }
 
       setStatus('Batch processing complete')
     } catch (error) {
@@ -195,6 +220,17 @@ export default function GenerateEmbeddingsSection() {
           </div>
         </div>
 
+        <div className="grid grid-cols-2 gap-4 mt-2">
+          <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-md">
+            <div className="text-sm font-medium">Total Embedding Time</div>
+            <div className="text-lg font-bold">{totalEmbeddingTime.toFixed(2)} ms</div>
+          </div>
+          <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-md">
+            <div className="text-sm font-medium">Total Embeddings Processed</div>
+            <div className="text-lg font-bold">{totalEmbeddingsProcessed}</div>
+          </div>
+        </div>
+
         {status && (
           <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
             <div className="text-sm">{status}</div>
@@ -232,6 +268,30 @@ export default function GenerateEmbeddingsSection() {
                           </AccordionContent>
                         </AccordionItem>
                       </Accordion>
+                    </div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        )}
+
+        {slowMessages.length > 0 && (
+          <Accordion type="single" collapsible className="mt-4">
+            <AccordionItem value="slow-messages">
+              <AccordionTrigger className="flex items-center gap-2">
+                <AlertCircle size={16} className="text-red-500" />
+                <span>Slow Messages ({slowMessages.length})</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-2">
+                  {slowMessages.map((messageId, index) => (
+                    <div key={index} className="p-2 bg-gray-100 dark:bg-gray-800 rounded border border-red-300">
+                      <div className="flex justify-between">
+                        <span className="font-medium">Message ID</span>
+                        <span className="text-red-500">{messageId}</span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">Processing time exceeded {indexerRef.current?.getStatus().debug.slowMessageThreshold || 1000}ms</div>
                     </div>
                   ))}
                 </div>

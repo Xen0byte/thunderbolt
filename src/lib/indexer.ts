@@ -11,6 +11,12 @@ export class Indexer {
   private shouldCancelAfterNextBatch: boolean
   private messageCount: number
   private embeddingsCount: number
+  private debug: {
+    slowMessageThreshold: number
+    slowMessages: string[]
+    totalEmbeddingTime: number
+    totalEmbeddingsProcessed: number
+  }
 
   constructor({ db, batchSize = 10 }: { db: DrizzleContextType['db']; batchSize?: number }) {
     this.db = db
@@ -19,6 +25,12 @@ export class Indexer {
     this.shouldCancelAfterNextBatch = false
     this.messageCount = 0
     this.embeddingsCount = 0
+    this.debug = {
+      slowMessageThreshold: 1000,
+      slowMessages: [],
+      totalEmbeddingTime: 0,
+      totalEmbeddingsProcessed: 0,
+    }
   }
 
   async fetchNextBatch() {
@@ -35,7 +47,21 @@ export class Indexer {
   async embedNextBatch() {
     const messages = await this.fetchNextBatch()
     const texts = messages.map((message) => message.email_messages.text_body)
+
+    console.log(texts)
+
+    const startTime = performance.now()
     const embeddings = await generateEmbeddings(texts)
+    const endTime = performance.now()
+
+    const embeddingTime = endTime - startTime
+    this.debug.totalEmbeddingTime += embeddingTime
+    this.debug.totalEmbeddingsProcessed += texts.length
+
+    if (embeddingTime > this.debug.slowMessageThreshold) {
+      this.debug.slowMessages.push(messages[0].email_messages.id)
+    }
+
     return texts.map((_text, index) => ({
       embedding: embeddings[index],
       email_message_id: messages[index].email_messages.id,
@@ -55,6 +81,7 @@ export class Indexer {
   async indexAll() {
     this.isIndexing = true
     this.shouldCancelAfterNextBatch = false
+
     while (true) {
       if (this.shouldCancelAfterNextBatch) {
         this.isIndexing = false
@@ -67,6 +94,7 @@ export class Indexer {
       if (this.messageCount === this.embeddingsCount) {
         break
       }
+
       await this.indexNextBatch()
     }
   }
@@ -96,6 +124,7 @@ export class Indexer {
       embeddingsCount: this.embeddingsCount,
       shouldCancelAfterNextBatch: this.shouldCancelAfterNextBatch,
       batchSize: this.batchSize,
+      debug: this.debug,
     }
   }
 }
