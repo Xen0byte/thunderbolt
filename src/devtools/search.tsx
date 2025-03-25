@@ -126,11 +126,15 @@ export default function SearchSection() {
                         <TabsContent value="messages" className="px-4 pb-4">
                           <div className="space-y-4">
                             {result.email_messages &&
-                              result.email_messages.map((message, msgIndex) => (
+                              result.email_messages.map((message: any, msgIndex: number) => (
                                 <div key={msgIndex} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
                                   <div className="flex justify-between mb-2">
                                     <div className="font-medium">{message.from}</div>
                                     <div className="text-xs text-gray-500 dark:text-gray-400">{new Date(message.date).toLocaleString()}</div>
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                    <span className="mr-4">Thread ID: {result.email_thread?.id || 'N/A'}</span>
+                                    <span>Message ID: {message.id || message.message_id || 'N/A'}</span>
                                   </div>
                                   <div className="text-sm whitespace-pre-wrap">{message.text_body}</div>
                                 </div>

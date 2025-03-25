@@ -1,6 +1,6 @@
 /**
  * This file is auto-generated. Do not edit directly.
- * Generated on: 2025-03-25T01:27:03.185Z
+ * Generated on: 2025-03-25T03:34:20.595Z
  */
 
 export interface Migration {
@@ -34,5 +34,10 @@ export const migrations: Migration[] = [
     "hash": "0004_spotty_kat_farrell",
     "name": "0004_spotty_kat_farrell.sql",
     "sql": "ALTER TABLE `embeddings` ADD `as_text` text;--> statement-breakpoint\nALTER TABLE `email_threads` DROP COLUMN `as_text`;"
+  },
+  {
+    "hash": "0005_striped_ultimates",
+    "name": "0005_striped_ultimates.sql",
+    "sql": "ALTER TABLE `email_threads` ADD `root_message_id` text;"
   }
 ];

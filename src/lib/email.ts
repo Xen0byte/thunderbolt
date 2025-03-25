@@ -4,6 +4,18 @@ import { eq, sql } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 
 /**
+ * Extract references from email parts
+ * @param email The email message to extract references from
+ * @returns An array of reference message IDs
+ */
+function extractReferences(email: EmailMessage): string[] {
+  const [part] = email.parts.parts
+  const headers = part.headers
+  const references = headers?.find((header) => header.name === 'references' && header.value && header.value.TextList)?.value?.TextList ?? []
+  return references
+}
+
+/**
  * EmailThreader class for managing email threads
  * Groups emails into threads based on in-reply-to headers
  */
@@ -89,40 +101,28 @@ export class EmailThreader {
    */
   private async processEmail(email: EmailMessage): Promise<void> {
     try {
-      const inReplyTo = email.in_reply_to
+      // Extract references from the email parts
+      const [rootEmailMessageId] = extractReferences(email)
 
-      // If this is a reply to another email, find the parent email
-      if (inReplyTo) {
-        const parent = await this.db.select().from(emailMessagesTable).where(eq(emailMessagesTable.messageId, inReplyTo)).limit(1).get()
-
-        // Parent not found
-        if (!parent) {
-          console.warn(`Parent email ${inReplyTo} not found`)
-
-          const threadId = uuidv7()
-          await this.createThread(threadId, email.subject || email.subject, email.date)
-          await this.addEmailToThread(email.id, threadId, email.subject, email.date)
-          return
-        }
-
-        // Parent has a thread
-        if (parent.email_thread_id) {
-          await this.addEmailToThread(email.id, parent.email_thread_id, email.subject, email.date)
-          return
-        }
-
-        // Parent does not have a thread
+      // If we don't have a root email message id, create a new thread
+      if (!rootEmailMessageId) {
         const threadId = uuidv7()
-        await this.createThread(threadId, parent.subject || email.subject, parent.date)
-        await this.addEmailToThread(parent.id, threadId, parent.subject, parent.date)
+        await this.createThread(threadId, email.subject, email.date, email.messageId)
         await this.addEmailToThread(email.id, threadId, email.subject, email.date)
         return
       }
 
-      // If no parent found or this is not a reply, create a new thread
-      const threadId = uuidv7()
-      await this.createThread(threadId, email.subject, email.date)
-      await this.addEmailToThread(email.id, threadId, email.subject, email.date)
+      // Look for a thread with this root_message_id
+      const existingThread = await this.db.select().from(emailThreadsTable).where(eq(emailThreadsTable.root_message_id, rootEmailMessageId)).limit(1).get()
+
+      if (!existingThread) {
+        const threadId = uuidv7()
+        await this.createThread(threadId, email.subject, email.date, rootEmailMessageId)
+        await this.addEmailToThread(email.id, threadId, email.subject, email.date)
+        return
+      }
+
+      await this.addEmailToThread(email.id, existingThread.id, email.subject, email.date)
     } catch (error) {
       console.error(`Failed to process email ${email.id}:`, error)
       throw error
@@ -134,14 +134,16 @@ export class EmailThreader {
    * @param id Thread ID
    * @param subject Thread subject
    * @param date Thread date
+   * @param rootEmailMessageId Root email message id
    * @returns A promise that resolves when the thread is created
    */
-  private async createThread(id: string, subject: string | null, date: string): Promise<void> {
+  private async createThread(id: string, subject: string | null, date: string, rootEmailMessageId: string): Promise<void> {
     try {
       await this.db.insert(emailThreadsTable).values({
         id,
         subject: subject || '(No Subject)',
         date,
+        root_message_id: rootEmailMessageId,
       })
       this.threadsCreated++
     } catch (error) {

@@ -44,6 +44,8 @@ export default function ResetEmailMessagesSection() {
   const resetThreadsMutation = useMutation({
     mutationFn: async () => {
       // Delete only email threads
+      // First, set email_thread_id to null for all email messages
+      await db.update(emailMessagesTable).set({ email_thread_id: null }).execute()
       await db.delete(emailThreadsTable).execute()
       return true
     },

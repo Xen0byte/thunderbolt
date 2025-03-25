@@ -1,0 +1,1 @@
+ALTER TABLE `email_threads` ADD `root_message_id` text;

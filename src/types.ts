@@ -73,6 +73,7 @@ export type ParsedEmailHeader = {
       }
   value: {
     Text?: string
+    TextList?: string[]
     ContentType?: {
       c_type: string
       c_subtype: string

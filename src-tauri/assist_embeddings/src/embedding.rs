@@ -19,7 +19,7 @@ impl Embedder {
         let device = candle::Device::new_metal(0)?;
 
         // Get model and tokenizer files - use E5-small model
-        let model_name = "intfloat/e5-small";
+        let model_name = "intfloat/e5-small-v2";
         let api = Api::new()?;
         let model = api
             .repo(Repo::new(model_name.to_string(), RepoType::Model))

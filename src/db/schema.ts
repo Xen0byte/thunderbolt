@@ -1,3 +1,4 @@
+import { ParsedEmail } from '@/types'
 import { Attachment, Message } from 'ai'
 import { sql } from 'drizzle-orm'
 import { customType, sqliteTable, text } from 'drizzle-orm/sqlite-core'
@@ -56,6 +57,7 @@ export const emailThreadsTable = sqliteTable('email_threads', {
   id: text('id').primaryKey().notNull().unique(),
   subject: text('subject').notNull(),
   date: text('date').notNull(),
+  root_message_id: text('root_message_id'),
 })
 
 export const emailMessagesTable = sqliteTable('email_messages', {
@@ -63,7 +65,7 @@ export const emailMessagesTable = sqliteTable('email_messages', {
   messageId: text('message_id').notNull().unique(),
   html_body: text('html_body').notNull(),
   text_body: text('text_body').notNull(),
-  parts: text('parts', { mode: 'json' }).notNull(),
+  parts: text('parts', { mode: 'json' }).notNull().$type<ParsedEmail>(),
   subject: text('subject'),
   date: text('date').notNull(),
 
