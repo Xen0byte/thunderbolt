@@ -26,11 +26,15 @@ export function SideviewProvider({ children, sideviewType: initialSideviewType =
   }
 
   useEffect(() => {
+    const url = new URL(window.location.href)
+
     if (sideviewType && sideviewId) {
-      window.history.pushState(null, '', `/${sideviewType}s/${encodeURIComponent(sideviewId)}`)
+      url.searchParams.set('sideview', `${sideviewType}:${encodeURIComponent(sideviewId)}`)
     } else {
-      window.history.pushState(null, '', '/')
+      url.searchParams.delete('sideview')
     }
+
+    window.history.pushState(null, '', url.toString())
   }, [sideviewType, sideviewId])
 
   return (

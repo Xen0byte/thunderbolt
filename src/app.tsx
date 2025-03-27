@@ -23,11 +23,11 @@ import { TrayManager, TrayProvider } from './lib/tray'
 import Loading from './loading'
 import SettingsLayout from './settings/layout'
 import { SettingsProvider } from './settings/provider'
+import { SideviewProvider } from './sideview/provider'
 import { ImapSyncClient, ImapSyncProvider } from './sync'
-import { InitData, Settings as SettingsType } from './types'
+import { InitData, Settings as SettingsType, SideviewType } from './types'
 import UiKitPage from './ui-kit'
 import WelcomePage from './welcome'
-import { SideviewProvider } from './sideview/provider'
 
 const queryClient = new QueryClient()
 
@@ -60,7 +60,21 @@ const init = async (): Promise<InitData> => {
     console.warn('No IMAP account settings found')
   }
 
-  const { tray, window } = await TrayManager.init()
+  const tray = await TrayManager.init()
+
+  const url = new URL(window.location.href)
+  const sideviewParam = url.searchParams.get('sideview')
+
+  let sideviewType: SideviewType | null = null
+  let sideviewId: string | null = null
+
+  if (sideviewParam) {
+    const [type, id] = sideviewParam.split(':')
+    if (type && id) {
+      sideviewType = type as SideviewType
+      sideviewId = decodeURIComponent(id)
+    }
+  }
 
   return {
     db,
@@ -68,8 +82,9 @@ const init = async (): Promise<InitData> => {
     settings,
     imap,
     imapSync,
-    tray,
-    window,
+    sideviewType,
+    sideviewId,
+    ...tray,
   }
 }
 
@@ -92,7 +107,7 @@ export const App = () => {
             <ImapSyncProvider client={initData.imapSync}>
               <SettingsProvider initialSettings={initData.settings} section="main">
                 <SidebarProvider>
-                  <SideviewProvider>
+                  <SideviewProvider sideviewType={initData.sideviewType} sideviewId={initData.sideviewId}>
                     <BrowserRouter>
                       <Routes>
                         <Route path="/" element={<Layout />}>

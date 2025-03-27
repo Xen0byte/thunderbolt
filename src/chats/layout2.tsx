@@ -1,4 +1,3 @@
-import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenuButton, SidebarProvider } from '@/components/ui/sidebar'
 import { useSideview } from '@/sideview/provider'
@@ -23,9 +22,8 @@ export default function Page() {
   return (
     <SidebarProvider>
       <ChatSidebar />
-      <ResizablePanelGroup direction="horizontal">
+      <ResizablePanelGroup direction="horizontal" autoSaveId="sideview">
         <ResizablePanel>
-          <Button onClick={() => setSideview('message', '123')}>Set Sideview</Button>
           <Outlet />
         </ResizablePanel>
         <ResizableHandle withHandle />

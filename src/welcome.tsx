@@ -13,11 +13,13 @@ import { modelsTable, todosTable } from './db/schema'
 import { useImap } from './imap/provider'
 import { getFromFromParsedEmail, getMessageIdFromParsedEmail } from './lib/utils'
 import { useSettings } from './settings/provider'
+import { useSideview } from './sideview/provider'
 
 export default function WelcomePage() {
   const settingsContext = useSettings()
   const { client: imapClient } = useImap()
   const { db } = useDrizzle()
+  const { setSideview } = useSideview()
   const [_inboxSummary, setInboxSummary] = useState<string | null>(null)
   const [toDoList, setToDoList] = useState<{ item: string; imap_id: string | null }[]>([])
   const [loading, setLoading] = useState(true)
@@ -194,7 +196,7 @@ export default function WelcomePage() {
                       <div
                         key={index}
                         className="p-4 bg-secondary/10 hover:bg-secondary/80 rounded-lg flex items-start gap-3 cursor-pointer transition-colors group"
-                        onClick={() => console.log(`Todo clicked: ${todo.imap_id}`)}
+                        onClick={() => todo.imap_id && setSideview('imap', todo.imap_id)}
                       >
                         <Square className="h-5 w-5 text-primary flex-shrink-0 mt-0.5 group-hover:text-primary/80 transition-colors" />
                         <div className="flex-1">

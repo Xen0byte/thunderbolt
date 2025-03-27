@@ -18,6 +18,8 @@ export type InitData = {
   imapSync: ImapSyncClient
   tray: TrayIcon | undefined
   window: Window | undefined
+  sideviewType: SideviewType | null
+  sideviewId: string | null
 }
 
 export type ChatMessagePart = TextUIPart | ReasoningUIPart | ToolInvocationUIPart | SourceUIPart
@@ -90,4 +92,4 @@ export type ParsedEmailHeader = {
   offset_field: number
 }
 
-export type SideviewType = 'message' | 'thread'
+export type SideviewType = 'message' | 'thread' | 'imap'
