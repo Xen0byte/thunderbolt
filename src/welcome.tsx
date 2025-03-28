@@ -11,7 +11,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './comp
 import { useDrizzle } from './db/provider'
 import { modelsTable, todosTable } from './db/schema'
 import { useImap } from './imap/provider'
-import { getFromFromParsedEmail, getMessageIdFromParsedEmail } from './lib/utils'
 import { useSettings } from './settings/provider'
 import { useSideview } from './sideview/provider'
 
@@ -48,14 +47,15 @@ export default function WelcomePage() {
         console.log('Regenerating todos')
 
         // Delete existing todos with email_thread_id
-        await db.delete(todosTable).where(isNotNull(todosTable.imap_id))
+        await db.delete(todosTable).where(isNotNull(todosTable.imapId))
 
         // Fetch emails from inbox
-        const inboxEmails = await imapClient.fetchInbox('INBOX', undefined, 10)
+        const { messages } = await imapClient.fetchMessages('INBOX', 1, 10)
 
-        const model = await db.select().from(modelsTable).where(eq(modelsTable.is_system, 1)).get()
+        const model = await db.select().from(modelsTable).where(eq(modelsTable.isSystem, 1)).get()
 
-        if (!model?.api_key) {
+        if (!model?.apiKey) {
+          console.log('No model found')
           setInboxSummary('Please set your OpenAI API key in settings to generate inbox summaries.')
           setLoading(false)
           setIsRefreshing(false)
@@ -63,16 +63,13 @@ export default function WelcomePage() {
         }
 
         const openai = createOpenAI({
-          apiKey: model.api_key,
+          apiKey: model.apiKey,
         })
 
-        // Create a prompt for summarizing the inbox
-        const emailsContext = inboxEmails
+        const emailsContext = messages
           .map(
-            (email) =>
-              `IMAP ID: ${getMessageIdFromParsedEmail(email)}\nSubject: ${email.subject || 'No subject'}\nFrom: ${getFromFromParsedEmail(email) || 'Unknown'}\nSnippet: ${
-                email.snippet || email.clean_text?.substring(0, 300) || 'No content'
-              }`
+            (message) =>
+              `IMAP ID: ${message.imapId}\nSubject: ${message.subject || 'No subject'}\nFrom: ${message.fromAddress || 'Unknown'}\nSnippet: ${message.textBody?.substring(0, 300) || 'No content'}`
           )
           .join('\n\n')
 
@@ -111,7 +108,7 @@ export default function WelcomePage() {
           await db.insert(todosTable).values({
             id: uuidv7(),
             item: todo.item,
-            imap_id: todo.imap_id,
+            imapId: todo.imap_id,
           })
         }
 
@@ -123,7 +120,7 @@ export default function WelcomePage() {
       } else {
         // If we don't need to regenerate todos, just fetch them from the database
         const todos = await db.select().from(todosTable).orderBy(todosTable.id)
-        setToDoList(todos.map((todo) => ({ item: todo.item, imap_id: todo.imap_id })))
+        setToDoList(todos.map((todo) => ({ item: todo.item, imap_id: todo.imapId })))
         setLoading(false)
       }
 

@@ -21,7 +21,7 @@ const formSchema = z
     provider: z.enum(['openai', 'fireworks', 'openai_compatible']),
     model: z.string().min(1, { message: 'Model name is required.' }),
     url: z.string().optional(),
-    api_key: z.string().optional(),
+    apiKey: z.string().optional(),
   })
   .refine(
     (data) => {
@@ -40,11 +40,11 @@ const formSchema = z
       if (data.provider === 'openai_compatible') {
         return true // API key is optional for openai_compatible
       }
-      return data.api_key !== undefined && data.api_key.length > 0
+      return data.apiKey !== undefined && data.apiKey.length > 0
     },
     {
       message: 'API Key is required for this provider',
-      path: ['api_key'],
+      path: ['apiKey'],
     }
   )
 
@@ -90,7 +90,7 @@ export default function ModelDetailPage() {
       provider: model?.provider || 'openai',
       model: model?.model || '',
       url: model?.url || '',
-      api_key: model?.api_key || '',
+      apiKey: model?.apiKey || '',
     },
   })
 
@@ -101,7 +101,7 @@ export default function ModelDetailPage() {
         provider: model.provider || 'openai',
         model: model.model || '',
         url: model.url || '',
-        api_key: model.api_key || '',
+        apiKey: model.apiKey || '',
       })
     }
   }, [model, form])
@@ -111,7 +111,7 @@ export default function ModelDetailPage() {
       updateModelMutation.mutate({
         id: modelId,
         ...values,
-        api_key: values.api_key || null,
+        apiKey: values.apiKey || null,
         url: values.url || null,
       })
     }
@@ -133,7 +133,7 @@ export default function ModelDetailPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
-              {model.is_system !== 1 && (
+              {model.isSystem !== 1 && (
                 <FormField
                   control={form.control}
                   name="model"
@@ -149,7 +149,7 @@ export default function ModelDetailPage() {
                 />
               )}
 
-              {model.is_system !== 1 && form.watch('provider') === 'openai_compatible' && (
+              {model.isSystem !== 1 && form.watch('provider') === 'openai_compatible' && (
                 <FormField
                   control={form.control}
                   name="url"
@@ -167,7 +167,7 @@ export default function ModelDetailPage() {
 
               <FormField
                 control={form.control}
-                name="api_key"
+                name="apiKey"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>API Key</FormLabel>
@@ -191,7 +191,7 @@ export default function ModelDetailPage() {
                 {updateModelMutation.isPending ? 'Saving...' : showSaved ? 'Saved!' : 'Save'}
               </Button>
 
-              {model.is_system === 0 && (
+              {model.isSystem === 0 && (
                 <Button type="button" variant="ghost" onClick={() => setShowDeleteDialog(true)} className="flex items-center gap-2">
                   <Trash2 className="h-4 w-4" />
                   Delete Model

@@ -58,27 +58,6 @@ export default class ImapClient {
   }
 
   /**
-   * **fetchInbox**
-   *
-   * Fetches messages from a mailbox.
-   *
-   * @param mailbox - The mailbox to fetch messages from (defaults to "INBOX")
-   * @param startIndex - Optional starting index for fetching messages
-   * @param count - Optional number of messages to fetch
-   *
-   * @example
-   * ```ts
-   * // Fetch the latest 10 messages from INBOX
-   * const messages = await ImapClient.fetchInbox("INBOX", undefined, 10);
-   *
-   * // Fetch messages from a specific mailbox
-   * const messages = await ImapClient.fetchInbox("Sent", undefined, 5);
-   * ```
-   */
-  async fetchInbox(mailbox: string = 'INBOX', startIndex?: number, count?: number): Promise<any[]> {
-    return await invoke<any[]>('fetch_inbox', { mailbox, startIndex, count })
-  }
-  /**
    * **fetchMessages**
    *
    * Fetches messages from a specific mailbox.

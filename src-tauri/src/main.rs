@@ -194,7 +194,7 @@ async fn fetch_messages(
     mailbox: String,
     start_index: Option<usize>,
     count: Option<usize>,
-) -> Result<serde_json::Value, String> {
+) -> Result<assist_imap_client::FetchMessagesResponse, String> {
     // Access state directly
     let state = app_handle.state::<Mutex<AppState>>();
     let state_guard = state.lock().await;
@@ -206,12 +206,9 @@ async fn fetch_messages(
         .ok_or_else(|| "IMAP client not initialized. Call init_imap first.".to_string())?;
 
     // Fetch messages from specified mailbox
-    let messages = imap_client
+    imap_client
         .fetch_messages(&mailbox, start_index, count)
-        .map_err(|e| format!("Failed to fetch messages from {}: {}", mailbox, e))?;
-
-    // Convert the messages to a JSON value
-    serde_json::to_value(&messages).map_err(|e| format!("Failed to serialize messages: {}", e))
+        .map_err(|e| format!("Failed to fetch messages from {}: {}", mailbox, e))
 }
 
 #[command]

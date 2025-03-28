@@ -151,7 +151,7 @@ impl ImapClient {
         mailbox: &str,
         start_index: Option<usize>,
         count: Option<usize>,
-    ) -> Result<JsonValue> {
+    ) -> Result<FetchMessagesResponse> {
         self.connect()?;
 
         let mut session_guard = self.session.lock().unwrap();
@@ -168,12 +168,11 @@ impl ImapClient {
             // If mailbox is empty, return empty result
             if total_messages == 0 {
                 // Return a properly structured empty result
-                let result = FetchMessagesResponse {
+                return Ok(FetchMessagesResponse {
                     index: 0,
                     total: 0,
                     messages: vec![],
-                };
-                return Ok(serde_json::to_value(result)?);
+                });
             }
 
             // Calculate the range to fetch
@@ -316,8 +315,8 @@ impl ImapClient {
             messages,
         };
 
-        // Convert to JsonValue
-        Ok(serde_json::to_value(result)?)
+        // Return the struct directly
+        Ok(result)
     }
 
     /// Fetch messages from a specific mailbox
