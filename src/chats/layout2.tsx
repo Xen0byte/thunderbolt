@@ -38,7 +38,7 @@ export default function Page() {
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarHeader>
-          <SidebarContent>
+          <SidebarContent className="w-full h-full overflow-scroll">
             <Sideview />
           </SidebarContent>
         </ResizablePanel>
