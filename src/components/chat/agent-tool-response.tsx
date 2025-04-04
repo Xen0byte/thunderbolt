@@ -1,4 +1,6 @@
 import { ToolInvocationUIPart } from '@ai-sdk/ui-utils'
+import { AlertCircle, Search } from 'lucide-react'
+import { ChatMessagePreview } from './message-preview'
 
 export type AgentToolResponseProps = {
   part: ToolInvocationUIPart
@@ -9,12 +11,10 @@ export const AgentToolResponse = ({ part }: AgentToolResponseProps) => {
     if (!results || !results.length) return null
 
     return (
-      <div className="space-y-2">
-        {results.map((result, index) => (
-          <div key={index} className="text-gray-700 leading-relaxed bg-amber-100 p-2">
-            {result}
-          </div>
-        ))}
+      <div className="space-y-3 mt-3">
+        {results.map((result, index) => {
+          return <ChatMessagePreview key={index} imapId={result} />
+        })}
       </div>
     )
   }
@@ -22,17 +22,23 @@ export const AgentToolResponse = ({ part }: AgentToolResponseProps) => {
   return (
     <>
       {part.toolInvocation.toolName === 'answer' && part.toolInvocation.args?.text ? (
-        <div className="space-y-2">
-          <div className="text-gray-700 leading-relaxed">{part.toolInvocation.args.text}</div>
+        <div className="space-y-3 rounded-lg overflow-hidden">
+          <div className="p-4">{part.toolInvocation.args.text}</div>
           {renderResults(part.toolInvocation.args.results)}
         </div>
       ) : part.toolInvocation.toolName === 'search' && part.toolInvocation.args?.query ? (
-        <div className="space-y-2">
-          <div className="bg-blue-50 border border-blue-200 p-2 rounded-md text-gray-700 leading-relaxed italic flex items-center">Searching for "{part.toolInvocation.args.query}"...</div>
+        <div className="space-y-3">
+          <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg shadow-sm text-foreground dark:text-foreground/90 leading-relaxed flex items-center gap-2">
+            <Search className="h-4 w-4 text-blue-600 dark:text-blue-400 animate-pulse" />
+            <span className="italic">Searching for "{part.toolInvocation.args.query}"...</span>
+          </div>
         </div>
       ) : (
-        <div className="space-y-2">
-          <div className="text-gray-700 leading-relaxed">Unknown tool: {part.toolInvocation.toolName}</div>
+        <div className="space-y-3">
+          <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-3 rounded-lg shadow-sm text-foreground dark:text-foreground/90 leading-relaxed flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+            <span>Unknown tool: {part.toolInvocation.toolName}</span>
+          </div>
         </div>
       )}
     </>
