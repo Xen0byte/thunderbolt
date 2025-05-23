@@ -26,8 +26,6 @@ export default function ChatUI({ chatHelpers, models, selectedModel, onModelChan
     scrollToBottom()
   }, [chatHelpers.messages])
 
-  console.log(chatHelpers.messages)
-
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden max-w-[760px] mx-auto">
       <div className="flex-1 p-4 overflow-y-auto space-y-4">

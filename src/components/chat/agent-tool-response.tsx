@@ -1,11 +1,10 @@
+import { tools } from '@/lib/tools'
+import type { ToolInvocationUIPart } from 'ai'
 import { Search } from 'lucide-react'
 import { ChatMessagePreview } from './message-preview'
-import { ToolInvocation } from 'ai'
 
 export type AgentToolResponseProps = {
-  part: ToolInvocation & {
-    toolInvocation: ToolInvocation
-  }
+  part: ToolInvocationUIPart
 }
 
 export const AgentToolResponse = ({ part }: AgentToolResponseProps) => {
@@ -39,8 +38,8 @@ export const AgentToolResponse = ({ part }: AgentToolResponseProps) => {
         <div className="space-y-3">
           <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg shadow-sm text-foreground dark:text-foreground/90 leading-relaxed flex items-center gap-2">
             <Search className="h-4 w-4 text-blue-600 dark:text-blue-400 animate-pulse" />
-            <span className="text-blue-600 dark:text-blue-400">{part.toolInvocation.toolName}</span>
-            {/* <span className="italic">{tools[part.toolInvocation.toolName as keyof typeof tools].verb}</span> */}
+            {/* <span className="text-blue-600 dark:text-blue-400">{part.toolInvocation.toolName}</span> */}
+            <span className="italic">{tools.find((tool) => tool.name === part.toolInvocation.toolName)?.verb}</span>
           </div>
         </div>
       )}

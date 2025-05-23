@@ -1,10 +1,10 @@
-import { UIDataTypes, UIMessagePart } from 'ai'
 import { TrayIcon } from '@tauri-apps/api/tray'
 import { Window } from '@tauri-apps/api/window'
+import { UIDataTypes, UIMessage, UIMessagePart } from 'ai'
 import { InferSelectModel } from 'drizzle-orm'
 import { SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy'
+import type { z } from 'zod'
 import * as schema from './db/schema'
-
 import {
   chatMessagesTable,
   chatThreadsTable,
@@ -21,7 +21,6 @@ import {
 import ImapClient from './imap/imap'
 import Database from './lib/libsql'
 import { ImapSyncClient } from './sync'
-import { UIMessage } from 'ai'
 
 export type InitData = {
   db: SqliteRemoteDatabase<typeof schema>
@@ -137,4 +136,12 @@ export type ImapEmailMessage = {
   toAddresses: ImapEmailAddress[]
   fromAddress: ImapEmailAddress
   references: string[]
+}
+
+export type ToolConfig = {
+  name: string
+  description: string
+  verb: string
+  parameters: z.ZodObject<any>
+  execute: (params: any) => Promise<any>
 }

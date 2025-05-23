@@ -1,15 +1,12 @@
+import * as schema from '@/db/schema'
 import { Model, SaveMessagesFunction, Setting } from '@/types'
+import { createDeepInfra } from '@ai-sdk/deepinfra'
 import { createFireworks } from '@ai-sdk/fireworks'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { convertToModelMessages, LanguageModel, streamText, ToolInvocation, UIMessage, wrapLanguageModel, extractReasoningMiddleware } from 'ai'
-import { createDeepInfra } from '@ai-sdk/deepinfra'
-import { v7 as uuidv7 } from 'uuid'
-
-import z from 'zod'
+import { convertToModelMessages, extractReasoningMiddleware, LanguageModel, streamText, ToolInvocation, UIMessage, wrapLanguageModel } from 'ai'
 import { SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy'
-import { todosTable } from '@/db/tables'
-import { eq, inArray } from 'drizzle-orm'
+import { toolset } from './tools'
 
 export type ToolInvocationWithResult<T = object> = ToolInvocation & {
   result: T
@@ -42,7 +39,7 @@ export const ollama = createOpenAI({
 })
 
 type AiFetchStreamingResponseOptions = {
-  db: SqliteRemoteDatabase
+  db: SqliteRemoteDatabase<typeof schema>
   init: RequestInit
   saveMessages: SaveMessagesFunction
   model: Model
@@ -104,7 +101,7 @@ export const createModel = (modelConfig: Model): LanguageModel => {
   }
 }
 
-export const aiFetchStreamingResponse = async ({ db, init, saveMessages, model: modelConfig, settings }: AiFetchStreamingResponseOptions) => {
+export const aiFetchStreamingResponse = async ({ db, init, saveMessages, model: modelConfig }: AiFetchStreamingResponseOptions) => {
   try {
     const baseModel = await createModel(modelConfig)
 
@@ -128,91 +125,11 @@ export const aiFetchStreamingResponse = async ({ db, init, saveMessages, model: 
     console.log('Using model', modelConfig.provider, modelConfig.model)
 
     const result = streamText({
-      // Currently llama is able to call the search tool, but it does not call the answer tool afterwards - need to debug why.
-      // model: ollama('llama3.2:3b-instruct-q4_1', {
-      //   structuredOutputs: true,
-      // }),
       model,
       system: p1,
       messages: convertToModelMessages(messages),
-      toolCallStreaming: true, // Causes issues because this results in incomplete result objects getting passed to React components. Experimentation to block rendering until the full objects are available is needed.
-      tools: {
-        getForecast: {
-          description: 'Get the weather forecast.',
-          parameters: z.object({
-            // location: z.string().describe('The location to get the weather forecast for.').optional(),
-          }),
-          execute: async () => {
-            try {
-              let url = 'https://api.open-meteo.com/v1/forecast?hourly=temperature_2m,precipitation,cloud_cover'
-
-              // Get location from settings if available
-              const locationLat = settings.find((s) => s.key === 'location_lat')?.value
-              const locationLng = settings.find((s) => s.key === 'location_lng')?.value
-
-              if (locationLat && locationLng) {
-                url = `${url}&latitude=${locationLat}&longitude=${locationLng}`
-              } else {
-                // Fallback to default coordinates if no settings found
-                url = `${url}&latitude=52.52&longitude=13.41`
-              }
-
-              const response = await fetch(url)
-              if (!response.ok) {
-                throw new Error(`Weather API returned ${response.status}: ${response.statusText}`)
-              }
-
-              console.log('response', response)
-
-              const forecast = await response.json()
-
-              console.log('forecast', forecast)
-              return forecast
-            } catch (error) {
-              console.error('Error fetching weather forecast:', error)
-              throw new Error('Failed to get weather forecast')
-            }
-          },
-        },
-        addTasks: {
-          description: "Add a task to the user's task (to do) list.",
-          parameters: z.object({
-            tasks: z.array(z.string()).describe("The tasks to add to the user's task (to do) list."),
-          }),
-          execute: async (params) => {
-            const tasks = await db
-              .insert(todosTable)
-              .values(
-                params.tasks.map((task: string) => ({
-                  id: uuidv7(),
-                  item: task,
-                }))
-              )
-              .returning()
-            return tasks
-          },
-        },
-        getTasks: {
-          description: "Get the user's task (to do) list.",
-          parameters: z.object({}),
-          execute: async () => {
-            const tasks = await db.select().from(todosTable)
-            return tasks
-          },
-        },
-        deleteTasks: {
-          description: "Delete a task from the user's task (to do) list.",
-          parameters: z.object({
-            taskIds: z.array(z.string()).describe("The IDs of the tasks to delete from the user's task (to do) list."),
-          }),
-          execute: async (params) => {
-            await db.delete(todosTable).where(inArray(todosTable.id, params.taskIds))
-            return {
-              success: true,
-            }
-          },
-        },
-      },
+      toolCallStreaming: true,
+      tools: toolset,
       // continueUntil: hasToolCall('answer'),
       // continueUntil: maxSteps(5),
 
