@@ -260,9 +260,19 @@ class ProxyService:
                 ct in content_type.lower()
                 for ct in ["application/json", "text/", "application/xml"]
             ):
-                # For text-based responses, we keep content as bytes
-                # FastAPI will handle the encoding properly
-                pass
+                # For text-based responses, ensure content is decoded properly
+                try:
+                    # Try to decode JSON responses to ensure proper UTF-8 handling
+                    if "application/json" in content_type.lower():
+                        import json
+
+                        # Decode bytes to string, then parse and re-encode to ensure proper formatting
+                        json_str = content.decode("utf-8")
+                        parsed_json = json.loads(json_str)
+                        content = json.dumps(parsed_json).encode("utf-8")
+                except Exception as e:
+                    logger.error(f"Error handling JSON content: {e}")
+                    # Continue with original content if parsing fails
 
             # Set proper content length
             response_headers["content-length"] = str(len(content))
@@ -274,6 +284,14 @@ class ProxyService:
                     logger.info(f"Content preview: {content_preview}")
                 except Exception:
                     logger.info("Content is not valid UTF-8")
+
+            # Ensure proper charset is set for text content types if missing
+            if (
+                "application/json" in content_type.lower()
+                or "text/" in content_type.lower()
+            ) and "charset" not in content_type.lower():
+                content_type = f"{content_type}; charset=utf-8"
+                response_headers["content-type"] = content_type
 
             return Response(
                 content=content,
