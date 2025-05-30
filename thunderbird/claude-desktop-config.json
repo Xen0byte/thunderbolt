@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "thunderbird": {
+      "command": "node",
+      "args": ["/absolute/path/to/thunderbird/mcp-stdio-server.js"],
+      "env": {},
+      "alwaysAllow": ["resources"]
+    }
+  }
+}
