@@ -90,8 +90,14 @@ export default function SettingsLayout() {
           <SidebarRail />
         </Sidebar>
         <SidebarInset>
-          <div className="flex h-12 w-full items-center px-4">{open ? null : <SidebarTrigger className="cursor-pointer" />}</div>
-          <Outlet />
+          <div className="flex flex-col h-full">
+            <header className="flex h-12 w-full items-center px-4">
+              {!open && <SidebarTrigger className="cursor-pointer" />}
+            </header>
+            <div className="flex-1 overflow-auto">
+              <Outlet />
+            </div>
+          </div>
         </SidebarInset>
       </SidebarProvider>
     </>
