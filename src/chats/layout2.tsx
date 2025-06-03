@@ -40,21 +40,25 @@ export default function Page() {
               </div>
             </div>
           </ResizablePanel>
-          <ResizableHandle withHandle />
-          <ResizablePanel ref={ref} collapsible defaultSize={20} minSize={15} onCollapse={() => setSideview(null, null)}>
-            <SidebarHeader>
-              <SidebarGroup>
-                <SidebarGroupContent className="flex justify-end w-full flex-1 items-center">
-                  <SidebarMenuButton onClick={() => ref?.current?.collapse()} className="w-fit pr-0 pl-0 aspect-square items-center justify-center cursor-pointer" tooltip="New Chat">
-                    <Sidebar />
-                  </SidebarMenuButton>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            </SidebarHeader>
-            <SidebarContent className="w-full h-full overflow-scroll">
-              <Sideview />
-            </SidebarContent>
-          </ResizablePanel>
+          {sideviewId && (
+            <>
+              <ResizableHandle withHandle />
+              <ResizablePanel ref={ref} collapsible defaultSize={20} minSize={15} onCollapse={() => setSideview(null, null)}>
+                <SidebarHeader>
+                  <SidebarGroup>
+                    <SidebarGroupContent className="flex justify-end w-full flex-1 items-center">
+                      <SidebarMenuButton onClick={() => ref?.current?.collapse()} className="w-fit pr-0 pl-0 aspect-square items-center justify-center cursor-pointer" tooltip="New Chat">
+                        <Sidebar />
+                      </SidebarMenuButton>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                </SidebarHeader>
+                <SidebarContent className="w-full h-full overflow-scroll">
+                  <Sideview />
+                </SidebarContent>
+              </ResizablePanel>
+            </>
+          )}
         </ResizablePanelGroup>
       </SidebarInset>
     </SidebarProvider>
