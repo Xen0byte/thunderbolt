@@ -23,6 +23,11 @@ anyhow = "1.0.98"
 serde = { version = "1.0.219", features = ["derive"] }
 thunderbolt-lib = { path = "." }
 
+[patch.crates-io]
+# Use git version to fix Windows build issue with to_str() method
+libsql = { git = "https://github.com/tursodatabase/libsql", branch = "main" }
+libsql-sys = { git = "https://github.com/tursodatabase/libsql", branch = "main" }
+
 [[bin]]
 name = "thunderbolt"
 path = "src/main.rs"
