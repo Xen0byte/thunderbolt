@@ -73,7 +73,7 @@ const init = async (): Promise<InitData> => {
   initializeTitleGenerator()
 
   const appDataDirPath = await createAppDataDir()
-  const databaseType = getDatabaseType()
+  const databaseType = await getDatabaseType()
   const dbPath = await getDatabasePath(databaseType, appDataDirPath)
 
   const db = await DatabaseSingleton.instance.initialize({
