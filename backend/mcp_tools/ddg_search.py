@@ -220,16 +220,17 @@ fetcher = WebContentFetcher()
 
 
 @mcp.tool()
-async def search(query: str, ctx: Context) -> str:
+async def search(query: str, ctx: Context, max_results: int = 10) -> str:
     """
     Search DuckDuckGo and return formatted results.
 
     Args:
         query: The search query string
+        max_results: Maximum number of results to return (default: 10)
         ctx: MCP context for logging
     """
     try:
-        results = await searcher.search(query, ctx, max_results=10)
+        results = await searcher.search(query, ctx, max_results)
         return searcher.format_results_for_llm(results)
     except Exception as e:
         traceback.print_exc(file=sys.stderr)

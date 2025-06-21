@@ -283,17 +283,18 @@ async def get_current_weather(lat: float, lng: float, ctx: Context) -> str:
 
 @mcp.tool()
 async def get_weather_forecast(
-    lat: float, lng: float, ctx: Context
+    lat: float, lng: float, ctx: Context, days: int = 3
 ) -> str:
     """
-    Get the weather forecast for specified coordinates (3 days). Call search_locations to find the coordinates if you don't have them.
+    Get the weather forecast for specified coordinates. Call search_locations to find the coordinates if you don't have them.
 
     Args:
         lat: Latitude coordinate
         lng: Longitude coordinate
+        days: Number of days to forecast (1-16, default: 3)
         ctx: MCP context for logging
     """
-    return await weather_client.get_weather_forecast(lat, lng, 3, ctx)
+    return await weather_client.get_weather_forecast(lat, lng, days, ctx)
 
 
 @mcp.tool()
