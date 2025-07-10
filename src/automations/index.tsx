@@ -56,7 +56,7 @@ export default function AutomationsPage() {
     placeholderData: (previousData) => previousData,
   })
 
-  const [triggersEnabled] = useBooleanSetting('triggers_is_enabled', false)
+  const [triggersEnabled] = useBooleanSetting('is_triggers_enabled', false)
 
   const deletePromptMutation = useMutation({
     mutationFn: async (promptId: string) => {

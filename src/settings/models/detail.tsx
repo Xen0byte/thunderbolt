@@ -6,19 +6,28 @@ import { useForm } from 'react-hook-form'
 import { useParams } from 'react-router'
 import { z } from 'zod'
 
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { useDatabase } from '@/hooks/use-database'
 import { modelsTable } from '@/db/tables'
+import { useDatabase } from '@/hooks/use-database'
 import { Model } from '@/types'
 import { Trash2 } from 'lucide-react'
 
 const formSchema = z
   .object({
-    provider: z.enum(['thunderbolt', 'openai', 'fireworks', 'openai_compatible', 'flower', 'together']),
+    provider: z.enum(['thunderbolt', 'openai', 'custom', 'openrouter', 'flower']),
     name: z.string().min(1, { message: 'Name is required.' }),
     model: z.string().min(1, { message: 'Model name is required.' }),
     url: z.string().optional(),
@@ -26,20 +35,20 @@ const formSchema = z
   })
   .refine(
     (data) => {
-      if (data.provider === 'openai_compatible') {
+      if (data.provider === 'custom') {
         return data.url !== undefined && data.url.length > 0
       }
       return true
     },
     {
-      message: 'URL is required for OpenAI Compatible providers',
+      message: 'URL is required for Custom providers',
       path: ['url'],
-    }
+    },
   )
   .refine(
     (data) => {
-      if (data.provider === 'openai_compatible') {
-        return true // API key is optional for openai_compatible
+      if (data.provider === 'custom') {
+        return true // API key is optional for custom provider
       }
       if (data.provider === 'thunderbolt' || data.provider === 'flower') {
         return true // API key not required for thunderbolt or flower
@@ -49,7 +58,7 @@ const formSchema = z
     {
       message: 'API Key is required for this provider',
       path: ['apiKey'],
-    }
+    },
   )
 
 export default function ModelDetailPage() {
@@ -171,7 +180,7 @@ export default function ModelDetailPage() {
                 />
               )}
 
-              {model.isSystem !== 1 && form.watch('provider') === 'openai_compatible' && (
+              {model.isSystem !== 1 && form.watch('provider') === 'custom' && (
                 <FormField
                   control={form.control}
                   name="url"
@@ -214,7 +223,12 @@ export default function ModelDetailPage() {
               </Button>
 
               {model.isSystem === 0 && (
-                <Button type="button" variant="ghost" onClick={() => setShowDeleteDialog(true)} className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="flex items-center gap-2"
+                >
                   <Trash2 className="h-4 w-4" />
                   Delete Model
                 </Button>
@@ -228,7 +242,9 @@ export default function ModelDetailPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently delete the model "{model.model}". This action cannot be undone.</AlertDialogDescription>
+            <AlertDialogDescription>
+              This will permanently delete the model "{model.model}". This action cannot be undone.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>

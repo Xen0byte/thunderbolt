@@ -72,10 +72,11 @@ export const isOpfsAvailable = async (): Promise<boolean> => {
 
 export interface Capabilities {
   libsql: boolean
+  native_fetch: boolean
   // extend as new backend capabilities are added
 }
 
-const DEFAULT_CAPABILITIES: Capabilities = { libsql: false }
+const DEFAULT_CAPABILITIES: Capabilities = { libsql: false, native_fetch: false }
 
 // Fetch once, then memoize for the rest of the session.
 const fetchCapabilities = memoize(async (): Promise<Capabilities> => {

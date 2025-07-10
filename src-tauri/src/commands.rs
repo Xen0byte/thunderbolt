@@ -121,6 +121,9 @@ pub struct Capabilities {
     /// Whether the application was compiled with the `libsql` feature and the corresponding
     /// commands (`init_libsql`, `execute`, `select`) are available.
     pub libsql: bool,
+    /// Whether the application was compiled with the `native_fetch` feature and therefore the
+    /// `tauri-plugin-http` plugin is available for native HTTP requests.
+    pub native_fetch: bool,
 }
 
 // Compile-time flag so we do not need to look anything up at runtime.
@@ -129,10 +132,16 @@ const LIBSQL_ENABLED: bool = true;
 #[cfg(not(feature = "libsql"))]
 const LIBSQL_ENABLED: bool = false;
 
+#[cfg(feature = "native_fetch")]
+const NATIVE_FETCH_ENABLED: bool = true;
+#[cfg(not(feature = "native_fetch"))]
+const NATIVE_FETCH_ENABLED: bool = false;
+
 /// Returns the set of capabilities supported by the current build.
 #[command]
 pub fn capabilities() -> Capabilities {
     Capabilities {
         libsql: LIBSQL_ENABLED,
+        native_fetch: NATIVE_FETCH_ENABLED,
     }
 } 

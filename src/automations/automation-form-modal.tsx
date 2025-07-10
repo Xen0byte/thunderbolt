@@ -60,7 +60,7 @@ export default function AutomationFormModal({
     queryFn: getSelectedModel,
   })
 
-  const [isTriggersEnabled] = useBooleanSetting('triggers_is_enabled', false)
+  const [isTriggersEnabled] = useBooleanSetting('is_triggers_enabled', false)
 
   const [promptText, setPromptText] = useState('')
   const [modelId, setModelId] = useState<string | null>(null)

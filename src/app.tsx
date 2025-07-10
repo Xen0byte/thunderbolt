@@ -226,7 +226,7 @@ export const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="system" storageKey="thunderbolt-ui-theme">
+      <ThemeProvider defaultTheme="system" storageKey="ui_theme">
         <TrayProvider tray={initData.tray} window={initData.window}>
           <MCPProvider>
             <ImapProvider client={initData.imap}>

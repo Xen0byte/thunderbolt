@@ -169,6 +169,17 @@ export const getSetting = async (key: string, defaultValue: string | null = null
 }
 
 /**
+ * Get a boolean setting value from the settings table
+ * @param key The setting key to retrieve
+ * @param defaultValue The default boolean value if setting doesn't exist
+ * @returns The boolean setting value
+ */
+export const getBooleanSetting = async (key: string, defaultValue: boolean = false): Promise<boolean> => {
+  const setting = await getSetting(key, defaultValue.toString())
+  return setting === 'true'
+}
+
+/**
  * Update or create a setting in the settings table
  * @param key The setting key to update
  * @param value The new value for the setting

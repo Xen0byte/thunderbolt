@@ -42,15 +42,6 @@ export const seedModels = async () => {
         enabled: 1,
         isConfidential: 0,
       },
-      {
-        id: uuidv7(),
-        name: 'Llama 3.1 70B',
-        provider: 'thunderbolt' as const,
-        model: 'llama-v3p1-70b-instruct',
-        isSystem: 0,
-        enabled: 1,
-        isConfidential: 0,
-      },
       // {
       //   id: uuidv7(),
       //   name: 'DeepSeek R1 671B',
@@ -59,27 +50,6 @@ export const seedModels = async () => {
       //   isSystem: 0,
       //   enabled: 1,
       // },
-      {
-        id: uuidv7(),
-        name: 'Llama 3.2 3B',
-        provider: 'openai_compatible' as const,
-        model: 'llama3.2:3b-instruct-q4_1',
-        url: 'http://localhost:11434/v1',
-        isSystem: 0,
-        enabled: 1,
-        isConfidential: 0,
-      },
-      // Confidential Compute model
-      {
-        id: uuidv7(),
-        name: 'Mistral Small 24B (Confidential)',
-        provider: 'flower' as const,
-        model: 'mistralai/mistral-small-3.1-24b',
-        isSystem: 0,
-        enabled: 1,
-        toolUsage: 1,
-        isConfidential: 1,
-      },
     ]
     for (const model of seedData) {
       await db.insert(modelsTable).values(model)
@@ -108,7 +78,7 @@ export const seedSettings = async () => {
   await db
     .insert(settingsTable)
     .values({
-      key: 'triggers_is_enabled',
+      key: 'is_triggers_enabled',
       value: 'false',
     })
     .onConflictDoNothing()

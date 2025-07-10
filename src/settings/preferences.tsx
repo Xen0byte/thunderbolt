@@ -8,6 +8,17 @@ import { ChevronsUpDown } from 'lucide-react'
 import React from 'react'
 
 import { ThemeToggle } from '@/components/theme-toggle'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
@@ -16,6 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { SectionCard } from '@/components/ui/section-card'
 
 import { useDatabase } from '@/hooks/use-database'
+import { resetAppDir } from '@/lib/fs'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -46,6 +58,7 @@ export default function PreferencesSettingsPage() {
   const [searchQuery, setSearchQuery] = React.useState('')
   const [locations, setLocations] = React.useState<LocationData[]>([])
   const [isSearching, setIsSearching] = React.useState(false)
+  const [isResetting, setIsResetting] = React.useState(false)
 
   // Get any existing settings from the database
   const { data: settings } = useQuery({
@@ -90,8 +103,10 @@ export default function PreferencesSettingsPage() {
 
       locationForm.reset({
         locationName: settings.locationName as string,
-        locationLat: typeof settings.locationLat === 'string' ? settings.locationLat : String(settings.locationLat || ''),
-        locationLng: typeof settings.locationLng === 'string' ? settings.locationLng : String(settings.locationLng || ''),
+        locationLat:
+          typeof settings.locationLat === 'string' ? settings.locationLat : String(settings.locationLat || ''),
+        locationLng:
+          typeof settings.locationLng === 'string' ? settings.locationLng : String(settings.locationLng || ''),
       })
     }
   }, [settings, nameForm, locationForm])
@@ -246,6 +261,18 @@ export default function PreferencesSettingsPage() {
     handleLocationSave(location)
   }
 
+  const handleResetDatabase = async () => {
+    setIsResetting(true)
+    try {
+      await resetAppDir()
+      // Refresh the page to reinitialize the app
+      window.location.reload()
+    } catch (error) {
+      console.error('Failed to reset database:', error)
+      setIsResetting(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 p-4 w-full max-w-[760px] mx-auto">
       <h1 className="text-4xl font-bold tracking-tight mb-2 text-primary">Preferences</h1>
@@ -312,15 +339,29 @@ export default function PreferencesSettingsPage() {
                   >
                     <PopoverTrigger asChild>
                       <FormControl>
-                        <Button variant="outline" role="combobox" aria-expanded={open} className={cn('w-full justify-between', !field.value && 'text-muted-foreground')}>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={open}
+                          className={cn('w-full justify-between', !field.value && 'text-muted-foreground')}
+                        >
                           {field.value || 'Select location...'}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" side="bottom" align="start" sideOffset={4}>
+                    <PopoverContent
+                      className="p-0 w-[--radix-popover-trigger-width]"
+                      side="bottom"
+                      align="start"
+                      sideOffset={4}
+                    >
                       <Command>
-                        <CommandInput placeholder="Search for locations..." value={searchQuery} onValueChange={setSearchQuery} />
+                        <CommandInput
+                          placeholder="Search for locations..."
+                          value={searchQuery}
+                          onValueChange={setSearchQuery}
+                        />
                         <CommandList>
                           {searchQuery.trim().length > 0 && isSearching && (
                             <div className="py-6 text-center text-sm">
@@ -330,11 +371,18 @@ export default function PreferencesSettingsPage() {
                               </div>
                             </div>
                           )}
-                          {searchQuery.trim().length > 0 && !isSearching && locations.length === 0 && <CommandEmpty>No locations found.</CommandEmpty>}
+                          {searchQuery.trim().length > 0 && !isSearching && locations.length === 0 && (
+                            <CommandEmpty>No locations found.</CommandEmpty>
+                          )}
                           {!isSearching && locations.length > 0 && (
                             <CommandGroup>
                               {locations.map((location) => (
-                                <CommandItem key={`${location.coordinates.lat}-${location.coordinates.lng}`} value={location.name} onSelect={() => handleSelectLocation(location)} className="pl-2">
+                                <CommandItem
+                                  key={`${location.coordinates.lat}-${location.coordinates.lng}`}
+                                  value={location.name}
+                                  onSelect={() => handleSelectLocation(location)}
+                                  className="pl-2"
+                                >
                                   {location.name}
                                 </CommandItem>
                               ))}
@@ -351,6 +399,43 @@ export default function PreferencesSettingsPage() {
             />
           </form>
         </Form>
+      </SectionCard>
+
+      <div className="h-6" />
+
+      <SectionCard title="Local Database">
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-muted-foreground">Delete all of your local data.</p>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                disabled={isResetting}
+                className="border-destructive text-destructive hover:bg-destructive hover:text-primary-foreground"
+              >
+                {isResetting ? 'Resetting...' : 'Reset Database'}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset Local Database?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete all of your local data including settings, chat history, and cached
+                  information. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleResetDatabase}
+                  className="bg-destructive text-white hover:bg-destructive/90"
+                >
+                  Reset Database
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </SectionCard>
     </div>
   )

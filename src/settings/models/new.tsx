@@ -10,13 +10,13 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useDatabase } from '@/hooks/use-database'
 import { modelsTable } from '@/db/tables'
+import { useDatabase } from '@/hooks/use-database'
 import { Model } from '@/types'
 
 const formSchema = z
   .object({
-    provider: z.enum(['thunderbolt', 'openai', 'fireworks', 'openai_compatible', 'flower', 'together']),
+    provider: z.enum(['thunderbolt', 'openai', 'custom', 'openrouter', 'flower']),
     name: z.string().min(1, { message: 'Name is required.' }),
     model: z.string().min(1, { message: 'Model name is required.' }),
     url: z.string().optional(),
@@ -24,20 +24,20 @@ const formSchema = z
   })
   .refine(
     (data) => {
-      if (data.provider === 'openai_compatible') {
+      if (data.provider === 'custom') {
         return data.url !== undefined && data.url.length > 0
       }
       return true
     },
     {
-      message: 'URL is required for OpenAI Compatible providers',
+      message: 'URL is required for Custom providers',
       path: ['url'],
-    }
+    },
   )
   .refine(
     (data) => {
-      if (data.provider === 'openai_compatible') {
-        return true // API key is optional for openai_compatible
+      if (data.provider === 'custom') {
+        return true // API key is optional for custom provider
       }
       if (data.provider === 'thunderbolt' || data.provider === 'flower') {
         return true // API key optional for thunderbolt and flower
@@ -47,7 +47,7 @@ const formSchema = z
     {
       message: 'API Key is required for this provider',
       path: ['apiKey'],
-    }
+    },
   )
 
 export default function NewModelPage() {
@@ -112,10 +112,9 @@ export default function NewModelPage() {
                       <SelectContent>
                         <SelectItem value="thunderbolt">Thunderbolt</SelectItem>
                         <SelectItem value="openai">OpenAI</SelectItem>
-                        <SelectItem value="fireworks">Fireworks</SelectItem>
+                        <SelectItem value="openrouter">OpenRouter</SelectItem>
                         <SelectItem value="flower">Flower</SelectItem>
-                        <SelectItem value="together">Together AI</SelectItem>
-                        <SelectItem value="openai_compatible">OpenAI Compatible</SelectItem>
+                        <SelectItem value="custom">Custom</SelectItem>
                       </SelectContent>
                     </Select>
                   </FormControl>
@@ -152,7 +151,7 @@ export default function NewModelPage() {
               )}
             />
 
-            {form.watch('provider') === 'openai_compatible' && (
+            {form.watch('provider') === 'custom' && (
               <FormField
                 control={form.control}
                 name="url"

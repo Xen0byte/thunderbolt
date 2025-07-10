@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useDatabase } from '@/hooks/use-database'
 import { modelsTable } from '@/db/tables'
+import { useDatabase } from '@/hooks/use-database'
 import { useQuery } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import React from 'react'
@@ -52,7 +52,9 @@ export default function ModelsLayout() {
       <Select value={modelId || ''} onValueChange={handleModelSelect}>
         <SelectTrigger className="w-full p-6 py-8">
           <div className="flex items-center gap-4">
-            <div className="flex items-center justify-center bg-primary text-primary-foreground size-8 rounded-md font-medium">{currentModel?.provider?.[0]?.toUpperCase() || '?'}</div>
+            <div className="flex items-center justify-center bg-primary text-primary-foreground size-8 rounded-md font-medium">
+              {currentModel?.provider?.[0]?.toUpperCase() || '?'}
+            </div>
             <div className="flex flex-col">
               <SelectValue placeholder="Select a model" />
             </div>
@@ -64,9 +66,8 @@ export default function ModelsLayout() {
               <p className="text-left">
                 {model.provider === 'thunderbolt' && 'Thunderbolt'}
                 {model.provider === 'openai' && 'OpenAI'}
-                {model.provider === 'fireworks' && 'Fireworks'}
-                {model.provider === 'together' && 'Together AI'}
-                {model.provider === 'openai_compatible' && 'OpenAI Compatible'} - {model.model}
+                {model.provider === 'openrouter' && 'OpenRouter'}
+                {model.provider === 'custom' && 'Custom'} - {model.model}
               </p>
             </SelectItem>
           ))}

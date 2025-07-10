@@ -9,6 +9,7 @@ pub mod db_pool;
 pub use db_pool::DbPool;
 
 /// Application state for the libsql functionality
+#[derive(Default)]
 pub struct LibsqlState {
     pub db_pool: Option<DbPool>,
 }

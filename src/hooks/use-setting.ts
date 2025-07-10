@@ -1,4 +1,4 @@
-import { getSetting, updateSetting } from '@/lib/dal'
+import { getBooleanSetting, getSetting, updateSetting } from '@/lib/dal'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 /**
@@ -48,7 +48,7 @@ export const useSetting = (key: string, defaultValue: string | null = null) => {
  *
  * @example
  * ```tsx
- * const [triggersEnabled, setTriggersEnabled] = useBooleanSetting('triggers_is_enabled', false)
+ * const [triggersEnabled, setTriggersEnabled] = useBooleanSetting('is_triggers_enabled', false)
  *
  * // Use the value
  * if (triggersEnabled) {
@@ -64,10 +64,7 @@ export const useBooleanSetting = (key: string, defaultValue: boolean = false) =>
 
   const { data: value = defaultValue } = useQuery({
     queryKey: ['setting', key],
-    queryFn: async (): Promise<boolean> => {
-      const setting = await getSetting(key, defaultValue.toString())
-      return setting === 'true'
-    },
+    queryFn: (): Promise<boolean> => getBooleanSetting(key, defaultValue),
   })
 
   const mutation = useMutation({

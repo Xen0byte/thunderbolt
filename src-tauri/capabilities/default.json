@@ -48,6 +48,9 @@
         },
         {
           "url": "https://api.flower.ai"
+        },
+        {
+          "url": "https://integrate.api.nvidia.com"
         }
       ]
     },

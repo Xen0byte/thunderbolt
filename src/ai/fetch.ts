@@ -1,14 +1,14 @@
 import { DatabaseSingleton } from '@/db/singleton'
 import { settingsTable } from '@/db/tables'
 import { Model, SaveMessagesFunction } from '@/types'
-import { createFireworks } from '@ai-sdk/fireworks'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { createTogetherAI } from '@ai-sdk/togetherai'
+// import { createOpenRouter } from '@openrouter/ai-sdk-provider' // TODO: Use when AI SDK v2 branch is stable
 
 import { stripTagsMiddleware } from '@/ai/middleware/strip-tags'
 import { createPrompt } from '@/ai/prompt'
 import { getCloudUrl } from '@/lib/config'
+import { fetch } from '@/lib/fetch'
 import { handleFlowerChatStream } from '@/lib/flower'
 import { createToolset, getAvailableTools } from '@/lib/tools'
 import {
@@ -34,6 +34,7 @@ export const ollama = createOpenAI({
   baseURL: 'http://localhost:11434/v1',
   // compatibility: 'compatible',
   apiKey: 'ollama',
+  fetch,
 })
 
 type AiFetchStreamingResponseOptions = {
@@ -50,32 +51,39 @@ export const createModel = async (modelConfig: Model): Promise<LanguageModel> =>
       const openaiCompatible = createOpenAICompatible({
         name: 'custom',
         baseURL: `${cloudUrl}/openai`,
+        fetch,
       })
       return openaiCompatible(modelConfig.model) as LanguageModel
     }
     case 'openai': {
       if (!modelConfig.apiKey) throw new Error('No API key provided')
-      const openai = createOpenAI({ apiKey: modelConfig.apiKey })
+      const openai = createOpenAI({
+        apiKey: modelConfig.apiKey,
+        fetch,
+      })
       return openai(modelConfig.model)
     }
-    case 'fireworks': {
-      if (!modelConfig.apiKey) throw new Error('No API key provided')
-      const fireworks = createFireworks({ apiKey: modelConfig.apiKey })
-      return fireworks(modelConfig.model) as LanguageModel
-    }
-    case 'openai_compatible': {
-      if (!modelConfig.url) throw new Error('No URL provided for OpenAI Compatible provider')
+    case 'custom': {
+      if (!modelConfig.url) throw new Error('No URL provided for custom provider')
       const openaiCompatible = createOpenAICompatible({
         name: 'custom',
         baseURL: modelConfig.url,
         apiKey: modelConfig.apiKey || undefined,
+        fetch,
       })
       return openaiCompatible(modelConfig.model) as LanguageModel
     }
-    case 'together': {
+    case 'openrouter': {
       if (!modelConfig.apiKey) throw new Error('No API key provided')
-      const together = createTogetherAI({ apiKey: modelConfig.apiKey })
-      return together(modelConfig.model) as LanguageModel
+      // Using OpenAI-compatible approach until OpenRouter SDK v2 branch is stable
+      // https://github.com/OpenRouterTeam/ai-sdk-provider/pull/77
+      const openrouter = createOpenAICompatible({
+        name: 'openrouter',
+        baseURL: 'https://openrouter.ai/api/v1',
+        apiKey: modelConfig.apiKey,
+        fetch,
+      })
+      return openrouter(modelConfig.model) as LanguageModel
     }
     default:
       throw new Error(`Unsupported provider: ${modelConfig.provider}`)

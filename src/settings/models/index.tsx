@@ -1,17 +1,25 @@
+import { createModel } from '@/ai/fetch'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { StatusCard } from '@/components/ui/status-card'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { useDatabase } from '@/hooks/use-database'
 import { modelsTable } from '@/db/tables'
-import { createModel } from '@/ai/fetch'
+import { useDatabase } from '@/hooks/use-database'
+import { fetch } from '@/lib/fetch'
 import { cn } from '@/lib/utils'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -19,14 +27,14 @@ import { generateText } from 'ai'
 import { eq } from 'drizzle-orm'
 import ky from 'ky'
 import { Check, ChevronsUpDown, Loader2, Plus, Trash2, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useReducer, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { v7 as uuidv7 } from 'uuid'
 import { z } from 'zod'
 
 interface Model {
   id: string
-  provider: 'openai' | 'fireworks' | 'openai_compatible' | 'thunderbolt' | 'flower' | 'together'
+  provider: 'openai' | 'custom' | 'openrouter' | 'thunderbolt' | 'flower'
   name: string
   model: string
   url: string | null
@@ -41,11 +49,135 @@ interface AvailableModel {
   name?: string
   created?: number
   owned_by?: string
+  supports_tools?: boolean
+  supported_parameters?: string[]
+}
+
+type ModelState = {
+  isAddDialogOpen: boolean
+  deleteConfirmOpen: string | null
+  isTestingConnection: boolean
+  connectionStatus: 'idle' | 'success' | 'error'
+  connectionError: string | null
+  modelSelectOpen: boolean
+  availableModels: AvailableModel[]
+  isLoadingModels: boolean
+  selectedModelId: string
+  allAvailableModels: AvailableModel[]
+  modelSearchQuery: string
+  modelLoadError: string | null
+}
+
+type ModelAction =
+  | { type: 'OPEN_DIALOG' }
+  | { type: 'CLOSE_DIALOG' }
+  | { type: 'START_CONNECTION_TEST' }
+  | { type: 'CONNECTION_TEST_SUCCESS' }
+  | { type: 'CONNECTION_TEST_FAILURE'; error: string }
+  | { type: 'FETCH_MODELS_START' }
+  | { type: 'FETCH_MODELS_SUCCESS'; models: AvailableModel[] }
+  | { type: 'FETCH_MODELS_FAILURE'; error: string }
+  | { type: 'OPEN_MODEL_SELECT' }
+  | { type: 'CLOSE_MODEL_SELECT' }
+  | { type: 'UPDATE_MODEL_SEARCH_QUERY'; query: string }
+  | { type: 'SELECT_MODEL'; modelId: string }
+  | { type: 'PROVIDER_CHANGED' }
+  | { type: 'OPEN_DELETE_CONFIRM'; modelId: string }
+  | { type: 'CLOSE_DELETE_CONFIRM' }
+
+const initialState: ModelState = {
+  isAddDialogOpen: false,
+  deleteConfirmOpen: null,
+  isTestingConnection: false,
+  connectionStatus: 'idle',
+  connectionError: null,
+  modelSelectOpen: false,
+  availableModels: [],
+  isLoadingModels: false,
+  selectedModelId: '',
+  allAvailableModels: [],
+  modelSearchQuery: '',
+  modelLoadError: null,
+}
+
+function modelReducer(state: ModelState, action: ModelAction): ModelState {
+  switch (action.type) {
+    case 'OPEN_DIALOG':
+      // Fresh state every time the dialog is opened
+      return { ...initialState, isAddDialogOpen: true }
+    case 'CLOSE_DIALOG':
+      return { ...initialState, isAddDialogOpen: false }
+
+    case 'START_CONNECTION_TEST':
+      return { ...state, isTestingConnection: true, connectionStatus: 'idle', connectionError: null }
+    case 'CONNECTION_TEST_SUCCESS':
+      return { ...state, isTestingConnection: false, connectionStatus: 'success' }
+    case 'CONNECTION_TEST_FAILURE':
+      return { ...state, isTestingConnection: false, connectionStatus: 'error', connectionError: action.error }
+
+    case 'FETCH_MODELS_START':
+      return {
+        ...state,
+        isLoadingModels: true,
+        modelLoadError: null,
+        availableModels: [],
+        allAvailableModels: [],
+      }
+    case 'FETCH_MODELS_SUCCESS':
+      return {
+        ...state,
+        isLoadingModels: false,
+        availableModels: action.models,
+        allAvailableModels: action.models,
+      }
+    case 'FETCH_MODELS_FAILURE':
+      return {
+        ...state,
+        isLoadingModels: false,
+        modelLoadError: action.error,
+        availableModels: [],
+        allAvailableModels: [],
+      }
+
+    case 'OPEN_MODEL_SELECT':
+      return { ...state, modelSelectOpen: true }
+    case 'CLOSE_MODEL_SELECT':
+      return { ...state, modelSelectOpen: false, modelSearchQuery: '' }
+
+    case 'UPDATE_MODEL_SEARCH_QUERY':
+      return { ...state, modelSearchQuery: action.query }
+
+    case 'SELECT_MODEL':
+      return { ...state, selectedModelId: action.modelId, modelSelectOpen: false, modelSearchQuery: '' }
+
+    case 'PROVIDER_CHANGED':
+      return {
+        ...state,
+        selectedModelId: '',
+        availableModels: [],
+        allAvailableModels: [],
+        modelSearchQuery: '',
+        modelLoadError: null,
+        isLoadingModels: false,
+        modelSelectOpen: false,
+        connectionStatus: 'idle',
+        connectionError: null,
+        isTestingConnection: false,
+      }
+
+    case 'OPEN_DELETE_CONFIRM':
+      return { ...state, deleteConfirmOpen: action.modelId }
+    case 'CLOSE_DELETE_CONFIRM':
+      return { ...state, deleteConfirmOpen: null }
+
+    default:
+      return state
+  }
 }
 
 const formSchema = z
   .object({
-    provider: z.enum(['thunderbolt', 'openai', 'fireworks', 'openai_compatible', 'flower', 'together']),
+    provider: z.enum(['thunderbolt', 'openai', 'custom', 'openrouter', 'flower']),
     name: z.string().min(1, { message: 'Name is required.' }),
     model: z.string().min(1, { message: 'Model name is required.' }),
     customModel: z.string().optional(),
@@ -55,46 +187,66 @@ const formSchema = z
   })
   .refine(
     (data) => {
-      if (data.provider === 'openai_compatible') {
+      if (data.provider === 'custom') {
         return data.url !== undefined && data.url.length > 0
       }
       return true
     },
     {
-      message: 'URL is required for OpenAI Compatible providers',
+      message: 'URL is required for Custom providers',
       path: ['url'],
-    }
+    },
   )
   .refine(
     (data) => {
       if (data.provider === 'thunderbolt' || data.provider === 'flower') {
         return true // API key not required for thunderbolt or flower
       }
-      if (data.provider === 'openai_compatible') {
-        return true // API key is optional for openai_compatible
+      if (data.provider === 'custom') {
+        return true // API key is optional for custom (OpenAI compatible)
       }
       return data.apiKey !== undefined && data.apiKey.length > 0
     },
     {
       message: 'API Key is required for this provider',
       path: ['apiKey'],
-    }
+    },
   )
 
 export default function ModelsPage() {
   const { db } = useDatabase()
   const queryClient = useQueryClient()
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<string | null>(null)
-  const [isTestingConnection, setIsTestingConnection] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle')
-  const [connectionError, setConnectionError] = useState<string | null>(null)
-  const [modelSelectOpen, setModelSelectOpen] = useState(false)
-  const [availableModels, setAvailableModels] = useState<AvailableModel[]>([])
-  const [isLoadingModels, setIsLoadingModels] = useState(false)
-  const [selectedModelId, setSelectedModelId] = useState<string>('')
-  const [allAvailableModels, setAllAvailableModels] = useState<AvailableModel[]>([])
-  const [modelSearchQuery, setModelSearchQuery] = useState('')
+  const [state, dispatch] = useReducer(modelReducer, initialState)
+  const {
+    isAddDialogOpen,
+    deleteConfirmOpen,
+    isTestingConnection,
+    connectionStatus,
+    connectionError,
+    modelSelectOpen,
+    availableModels,
+    isLoadingModels,
+    selectedModelId,
+    allAvailableModels,
+    modelSearchQuery,
+    modelLoadError,
+  } = state
+
+  // Ensure form state resets whenever the add-model dialog fully closes
+  useEffect(() => {
+    if (!isAddDialogOpen) {
+      form.reset({
+        provider: 'thunderbolt',
+        name: '',
+        model: '',
+        customModel: '',
+        url: '',
+        apiKey: '',
+        toolUsage: true,
+      })
+      form.clearErrors()
+    }
+  }, [isAddDialogOpen])
 
   const { data: models = [] } = useQuery({
     queryKey: ['models'],
@@ -129,9 +281,7 @@ export default function ModelsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['models'] })
-      setIsAddDialogOpen(false)
-      setConnectionStatus('idle')
-      setConnectionError(null)
+      dispatch({ type: 'CLOSE_DIALOG' })
       form.reset()
     },
   })
@@ -142,7 +292,7 @@ export default function ModelsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['models'] })
-      setDeleteConfirmOpen(null)
+      dispatch({ type: 'CLOSE_DELETE_CONFIRM' })
     },
   })
 
@@ -186,9 +336,7 @@ export default function ModelsPage() {
       return
     }
 
-    setIsTestingConnection(true)
-    setConnectionStatus('idle')
-    setConnectionError(null)
+    dispatch({ type: 'START_CONNECTION_TEST' })
 
     // Create a timeout promise
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -227,35 +375,51 @@ export default function ModelsPage() {
       ])
 
       console.log('Model test response:', text)
-      setConnectionStatus('success')
+      dispatch({ type: 'CONNECTION_TEST_SUCCESS' })
     } catch (error) {
       console.error('Connection test error:', error)
-      setConnectionStatus('error')
-      setConnectionError(error instanceof Error ? error.message : 'Failed to connect to model')
-    } finally {
-      setIsTestingConnection(false)
+      dispatch({
+        type: 'CONNECTION_TEST_FAILURE',
+        error: error instanceof Error ? error.message : 'Failed to connect to model',
+      })
     }
   }
 
   const handleDialogOpenChange = (open: boolean) => {
-    setIsAddDialogOpen(open)
-    if (!open) {
-      // Reset ALL state when dialog closes
-      setConnectionStatus('idle')
-      setConnectionError(null)
-      setAvailableModels([])
-      setAllAvailableModels([])
-      setSelectedModelId('')
-      setModelSearchQuery('')
-      setIsLoadingModels(false)
-      setIsTestingConnection(false)
-      form.reset()
+    if (open) {
+      // Reset form before opening to ensure clean state
+      form.reset({
+        provider: 'thunderbolt',
+        name: '',
+        model: '',
+        customModel: '',
+        url: '',
+        apiKey: '',
+        toolUsage: true,
+      })
       form.clearErrors()
-    } else {
-      // When opening, if provider is thunderbolt, load the models
+      dispatch({ type: 'OPEN_DIALOG' })
       if (form.getValues('provider') === 'thunderbolt') {
         fetchAvailableModels('thunderbolt')
       }
+    } else {
+      dispatch({ type: 'CLOSE_DIALOG' })
+      // Reset form with explicit default values
+      form.reset({
+        provider: 'thunderbolt',
+        name: '',
+        model: '',
+        customModel: '',
+        url: '',
+        apiKey: '',
+        toolUsage: true,
+      })
+      form.clearErrors()
+      // Additional cleanup to ensure form state is fully cleared
+      setTimeout(() => {
+        form.clearErrors()
+        form.trigger() // Re-trigger validation to clear any lingering errors
+      }, 0)
     }
   }
 
@@ -280,9 +444,7 @@ export default function ModelsPage() {
   }
 
   const fetchAvailableModels = async (provider: string, apiKey?: string, url?: string) => {
-    setIsLoadingModels(true)
-    setAvailableModels([])
-    setAllAvailableModels([])
+    dispatch({ type: 'FETCH_MODELS_START' })
 
     try {
       let endpoint = ''
@@ -293,15 +455,7 @@ export default function ModelsPage() {
           endpoint = 'https://api.openai.com/v1/models'
           headers = { Authorization: `Bearer ${apiKey}` }
           break
-        case 'fireworks':
-          endpoint = 'https://api.fireworks.ai/inference/v1/models'
-          headers = { Authorization: `Bearer ${apiKey}` }
-          break
-        case 'together':
-          endpoint = 'https://api.together.xyz/v1/models'
-          headers = { Authorization: `Bearer ${apiKey}` }
-          break
-        case 'openai_compatible':
+        case 'custom':
           if (url) {
             // Ensure URL ends with /v1 if not already
             const baseUrl = url.endsWith('/v1') ? url : url.endsWith('/') ? `${url}v1` : `${url}/v1`
@@ -311,79 +465,110 @@ export default function ModelsPage() {
             }
           }
           break
+        case 'openrouter':
+          endpoint = 'https://openrouter.ai/api/v1/models'
+          headers = { Authorization: `Bearer ${apiKey}` }
+          break
         case 'thunderbolt':
           const thunderboltModels = [
-            { id: 'llama-v3p1-70b-instruct', name: 'Llama 3.1 70B' },
-            { id: 'llama-v3p1-405b-instruct', name: 'Llama 3.1 405B' },
-            { id: 'qwen3-235b-a22b', name: 'Qwen 3 235B' },
-            { id: 'qwen2p5-72b-instruct', name: 'Qwen 2.5 72B' },
+            { id: 'llama-v3p1-70b-instruct', name: 'Llama 3.1 70B', supports_tools: true },
+            { id: 'llama-v3p1-405b-instruct', name: 'Llama 3.1 405B', supports_tools: true },
+            { id: 'qwen3-235b-a22b', name: 'Qwen 3 235B', supports_tools: true },
+            { id: 'qwen2p5-72b-instruct', name: 'Qwen 2.5 72B', supports_tools: true },
             // { id: 'deepseek-r1-0528', name: 'DeepSeek R1 671B' },
           ]
-          setAllAvailableModels(thunderboltModels)
-          setAvailableModels(thunderboltModels)
-          setIsLoadingModels(false)
+          dispatch({ type: 'FETCH_MODELS_SUCCESS', models: thunderboltModels })
           return
       }
 
       if (endpoint) {
-        // For OpenAI Compatible, try even without API key, otherwise require API key
-        if (provider === 'openai_compatible' || apiKey) {
-          const response = await ky.get(endpoint, { headers }).json<{ data: AvailableModel[] }>()
+        // For Custom (OpenAI Compatible), try even without API key, otherwise require API key
+        if (provider === 'custom' || apiKey) {
+          const response = await ky.get(endpoint, { headers, fetch }).json<{ data: AvailableModel[] }>()
 
-          let models = response.data || []
+          let models = (response.data || []).map((m) => {
+            const supportsToolsByParams =
+              Array.isArray((m as any).supported_parameters) &&
+              ((m as any).supported_parameters.includes('tools') ||
+                (m as any).supported_parameters.includes('tool_choice'))
+
+            const supports_tools = (m as any).supports_tools === true || supportsToolsByParams
+
+            return { ...m, supports_tools }
+          })
 
           // Sort models alphabetically by ID
           models = models.sort((a, b) => a.id.localeCompare(b.id))
 
           // Store all models for search functionality
-          setAllAvailableModels(models)
-
-          // Show top 10 models by default
-          const top10Models = models.slice(0, 10)
-          setAvailableModels(top10Models)
+          dispatch({ type: 'FETCH_MODELS_SUCCESS', models })
         }
       }
     } catch (error) {
       console.error('Failed to fetch models:', error)
-      setAvailableModels([])
-      setAllAvailableModels([])
+
+      // Browser/network failure (could be offline, CORS, cert error, etc.)
+      if (error instanceof TypeError) {
+        dispatch({
+          type: 'FETCH_MODELS_FAILURE',
+          error: 'Network request failed (the browser blocked the request or the server is unreachable).',
+        })
+      }
+      // ky HTTPError with a Response object
+      else if (typeof error === 'object' && error && 'response' in error) {
+        // @ts-expect-error – ky HTTPError shape
+        const response: Response | undefined = error.response
+        if (response) {
+          dispatch({
+            type: 'FETCH_MODELS_FAILURE',
+            error: `Server responded with status ${response.status} ${response.statusText}`,
+          })
+        } else {
+          dispatch({ type: 'FETCH_MODELS_FAILURE', error: 'Server responded with an unknown error.' })
+        }
+      }
+      // Generic JavaScript error
+      else if (error instanceof Error && error.message) {
+        dispatch({ type: 'FETCH_MODELS_FAILURE', error: error.message })
+      } else {
+        dispatch({ type: 'FETCH_MODELS_FAILURE', error: 'Failed to load models' })
+      }
+
+      // No models could be fetched; state already handled in failure action
     } finally {
-      setIsLoadingModels(false)
+      // Nothing to do in finally; state set in success/failure actions
     }
   }
 
-  const generateModelName = async (modelId: string) => {
-    try {
-      // Use a system model to generate the name
-      const model = await createModel({
-        id: 'system',
-        name: 'System',
-        provider: 'thunderbolt',
-        model: 'llama-v3p1-70b-instruct',
-        url: null,
-        apiKey: null,
-        isSystem: 1,
-        enabled: 1,
-        toolUsage: 1,
-        isConfidential: 0,
-      })
+  // Generate a human-readable name from a model ID (no LLM call required)
+  const generateModelName = (modelId: string): string => {
+    const segment = modelId.split('/').pop() ?? modelId
+    const beforeColon = segment.split(':')[0]
+    const rawParts = beforeColon.split(/[-_]+/)
+    const tokens: string[] = []
 
-      const { text } = await generateText({
-        model,
-        prompt: `Generate a short, friendly display name (max 20 characters) for this AI model ID: "${modelId}". Return only the name, no quotes or punctuation. Examples: "GPT-4 Turbo", "Claude 3 Opus", "Llama 2 70B"`,
-        maxRetries: 0,
-      })
+    for (const part of rawParts) {
+      // Keep short patterns like "r1", "v3" together
+      if (/^[A-Za-z]\d$/.test(part)) {
+        tokens.push(part)
+        continue
+      }
 
-      return text.trim()
-    } catch (error) {
-      console.error('Failed to generate model name:', error)
-      // Fallback: clean up the model ID
-      return modelId.split('/').pop()?.replace(/-/g, ' ').replace(/_/g, ' ') || modelId
+      // Otherwise split letters/numbers
+      const sub = part.match(/[A-Za-z]+|[0-9]+(?:\.[0-9]+)?/g) ?? []
+      tokens.push(...sub)
     }
+
+    return tokens
+      .map((t) => {
+        // If token is purely numeric, keep as is; otherwise title-case it
+        return /^[0-9]+$/.test(t) ? t : t.charAt(0).toUpperCase() + t.slice(1)
+      })
+      .join(' ')
   }
 
   const handleSelectModel = async (modelId: string) => {
-    setSelectedModelId(modelId)
+    dispatch({ type: 'SELECT_MODEL', modelId: modelId })
 
     if (modelId === 'custom') {
       form.setValue('model', '')
@@ -399,14 +584,17 @@ export default function ModelsPage() {
       if (model?.name) {
         form.setValue('name', model.name)
       } else {
-        // Generate a name
-        const generatedName = await generateModelName(modelId)
+        // Generate a name locally
+        const generatedName = generateModelName(modelId)
         form.setValue('name', generatedName)
       }
+
+      // Set tool usage based on model support
+      const supportsTools = (model as any)?.supports_tools === true
+      form.setValue('toolUsage', supportsTools, { shouldDirty: false })
     }
 
-    setModelSelectOpen(false)
-    setModelSearchQuery('') // Clear search when model is selected
+    dispatch({ type: 'CLOSE_MODEL_SELECT' })
   }
 
   // Watch for provider changes with proper cleanup
@@ -419,17 +607,16 @@ export default function ModelsPage() {
 
     // Only act when provider actually changes (not on initial render)
     if (currentProvider !== previousProvider) {
-      // Reset model selection when provider changes
-      setSelectedModelId('')
-      setAvailableModels([])
-      setAllAvailableModels([])
-      setModelSearchQuery('')
+      dispatch({ type: 'PROVIDER_CHANGED' })
 
       // Reset form fields (excluding provider) using setValue with proper options
       form.setValue('name', '', { shouldValidate: false, shouldDirty: false })
       form.setValue('model', '', { shouldValidate: false, shouldDirty: false })
       form.setValue('customModel', '', { shouldValidate: false, shouldDirty: false })
-      form.setValue('url', currentProvider === 'openai_compatible' ? 'http://localhost:11434/v1' : '', { shouldValidate: false, shouldDirty: false })
+      form.setValue('url', currentProvider === 'custom' ? 'http://localhost:11434/v1' : '', {
+        shouldValidate: false,
+        shouldDirty: false,
+      })
       form.setValue('apiKey', '', { shouldValidate: false, shouldDirty: false })
       form.setValue('toolUsage', true, { shouldValidate: false, shouldDirty: false })
 
@@ -452,7 +639,7 @@ export default function ModelsPage() {
     const apiKey = watchedApiKey
     const url = watchedUrl
 
-    if (provider && (provider === 'thunderbolt' || (provider && apiKey) || (provider === 'openai_compatible' && url))) {
+    if (provider && (provider === 'thunderbolt' || (provider && apiKey) || (provider === 'custom' && url))) {
       fetchAvailableModels(provider, apiKey, url)
     }
   }, [watchedApiKey, watchedUrl, form])
@@ -463,14 +650,12 @@ export default function ModelsPage() {
         return 'Thunderbolt'
       case 'openai':
         return 'OpenAI'
-      case 'fireworks':
-        return 'Fireworks'
-      case 'openai_compatible':
-        return 'OpenAI Compatible'
+      case 'custom':
+        return 'Custom'
+      case 'openrouter':
+        return 'OpenRouter'
       case 'flower':
         return 'Flower'
-      case 'together':
-        return 'Together AI'
       default:
         return provider
     }
@@ -491,8 +676,20 @@ export default function ModelsPage() {
     }
 
     // Search through all available models when user types
-    return allAvailableModels.filter((model) => model.id.toLowerCase().includes(modelSearchQuery.toLowerCase()) || (model.name && model.name.toLowerCase().includes(modelSearchQuery.toLowerCase())))
+    return allAvailableModels.filter(
+      (model) =>
+        model.id.toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
+        (model.name && model.name.toLowerCase().includes(modelSearchQuery.toLowerCase())),
+    )
   }
+
+  // Calculate whether the currently selected model supports tools
+  const supportsToolsSelected = (() => {
+    if (!selectedModelId || selectedModelId === 'custom') return true
+    const model =
+      allAvailableModels.find((m) => m.id === selectedModelId) || availableModels.find((m) => m.id === selectedModelId)
+    return (model as any)?.supports_tools === true
+  })()
 
   return (
     <div className="flex flex-col gap-4 p-4 w-full max-w-[760px] mx-auto">
@@ -504,7 +701,7 @@ export default function ModelsPage() {
               <Plus />
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add Model</DialogTitle>
               <DialogDescription>Configure a new AI model for your assistant.</DialogDescription>
@@ -525,10 +722,9 @@ export default function ModelsPage() {
                           <SelectContent>
                             <SelectItem value="thunderbolt">Thunderbolt</SelectItem>
                             <SelectItem value="openai">OpenAI</SelectItem>
-                            <SelectItem value="fireworks">Fireworks</SelectItem>
-                            <SelectItem value="openai_compatible">OpenAI Compatible</SelectItem>
+                            <SelectItem value="openrouter">OpenRouter</SelectItem>
                             <SelectItem value="flower">Flower</SelectItem>
-                            <SelectItem value="together">Together AI</SelectItem>
+                            <SelectItem value="custom">Custom</SelectItem>
                           </SelectContent>
                         </Select>
                       </FormControl>
@@ -538,7 +734,7 @@ export default function ModelsPage() {
                 />
 
                 {/* URL for OpenAI Compatible */}
-                {form.watch('provider') === 'openai_compatible' && (
+                {form.watch('provider') === 'custom' && (
                   <FormField
                     control={form.control}
                     name="url"
@@ -546,8 +742,16 @@ export default function ModelsPage() {
                       <FormItem>
                         <FormLabel>URL</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="https://api.example.com/v1" />
+                          <div className="relative">
+                            <Input {...field} placeholder="http://localhost:11434/v1" className="pr-10" />
+                            {isLoadingModels && (
+                              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                            )}
+                          </div>
                         </FormControl>
+                        {modelLoadError && (
+                          <p className="text-sm text-destructive mt-1 whitespace-pre-line">{modelLoadError}</p>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -561,10 +765,13 @@ export default function ModelsPage() {
                     name="apiKey"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>API Key{form.watch('provider') === 'openai_compatible' ? ' (Optional)' : ''}</FormLabel>
+                        <FormLabel>API Key{form.watch('provider') === 'custom' ? ' (Optional)' : ''}</FormLabel>
                         <FormControl>
                           <Input type="password" {...field} placeholder="sk-..." />
                         </FormControl>
+                        {modelLoadError && form.watch('provider') !== 'custom' && (
+                          <p className="text-sm text-destructive mt-1 whitespace-pre-line">{modelLoadError}</p>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -581,7 +788,9 @@ export default function ModelsPage() {
                   // 1. Thunderbolt (no API key needed)
                   // 2. Other providers with API key
                   // 3. OpenAI Compatible with URL (API key optional)
-                  const showModelSelection = provider === 'thunderbolt' || (provider && apiKey) || (provider === 'openai_compatible' && url)
+                  const showModelSelection =
+                    !modelLoadError &&
+                    (provider === 'thunderbolt' || (provider && apiKey) || (provider === 'custom' && url))
 
                   if (!showModelSelection) return null
 
@@ -595,57 +804,96 @@ export default function ModelsPage() {
                           <Popover
                             open={modelSelectOpen}
                             onOpenChange={(open) => {
-                              setModelSelectOpen(open)
-                              if (!open) {
-                                setModelSearchQuery('') // Clear search when popover closes
+                              if (open) {
+                                dispatch({ type: 'OPEN_MODEL_SELECT' })
+                              } else {
+                                dispatch({ type: 'CLOSE_MODEL_SELECT' })
                               }
                             }}
                           >
                             <PopoverTrigger asChild>
                               <FormControl>
-                                <Button variant="outline" role="combobox" aria-expanded={modelSelectOpen} className={cn('w-full justify-between', !selectedModelId && 'text-muted-foreground')}>
-                                  {selectedModelId === 'custom' ? 'Custom Model' : selectedModelId ? availableModels.find((m) => m.id === selectedModelId)?.name || selectedModelId : 'Select model...'}
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={modelSelectOpen}
+                                  className={cn('w-full justify-between', !selectedModelId && 'text-muted-foreground')}
+                                >
+                                  {selectedModelId === 'custom'
+                                    ? 'Custom Model'
+                                    : selectedModelId
+                                      ? availableModels.find((m) => m.id === selectedModelId)?.name || selectedModelId
+                                      : 'Select model...'}
                                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
                             <PopoverContent className="p-0 w-full" side="bottom" align="start" sideOffset={4}>
                               <Command>
-                                <CommandInput placeholder="Search models..." value={modelSearchQuery} onValueChange={setModelSearchQuery} />
-                                <CommandList>
-                                  {isLoadingModels && <div className="py-6 text-center text-sm">Loading models...</div>}
-                                  {!isLoadingModels &&
-                                    (() => {
-                                      const filteredModels = getFilteredModels()
+                                <CommandInput
+                                  placeholder="Search models..."
+                                  value={modelSearchQuery}
+                                  onValueChange={(value) =>
+                                    dispatch({ type: 'UPDATE_MODEL_SEARCH_QUERY', query: value })
+                                  }
+                                />
+                                <div className="h-[200px] overflow-y-auto">
+                                  <CommandList className="max-h-none">
+                                    {isLoadingModels && (
+                                      <div className="py-6 text-center text-sm">Loading models...</div>
+                                    )}
+                                    {!isLoadingModels &&
+                                      (() => {
+                                        const filteredModels = getFilteredModels()
 
-                                      if (filteredModels.length === 0) {
-                                        return <CommandEmpty>{modelSearchQuery ? 'No models found matching your search.' : 'No models found.'}</CommandEmpty>
-                                      }
+                                        if (filteredModels.length === 0) {
+                                          return (
+                                            <CommandEmpty>
+                                              {modelSearchQuery
+                                                ? 'No models found matching your search.'
+                                                : 'No models found.'}
+                                            </CommandEmpty>
+                                          )
+                                        }
 
-                                      return (
-                                        <CommandGroup>
-                                          {!modelSearchQuery && availableModels.length === 10 && allAvailableModels.length > 10 && (
-                                            <div className="px-2 py-1 text-xs text-muted-foreground">Showing top 10 models. Type to search all {allAvailableModels.length} models.</div>
-                                          )}
-                                          {filteredModels.map((model) => (
-                                            <CommandItem key={model.id} value={model.id} onSelect={() => handleSelectModel(model.id)}>
-                                              <Check className={cn('mr-2 h-4 w-4', selectedModelId === model.id ? 'opacity-100' : 'opacity-0')} />
-                                              <div className="flex flex-col">
-                                                <span>{model.name || model.id}</span>
-                                                {model.name && <span className="text-xs text-muted-foreground">{model.id}</span>}
-                                              </div>
-                                            </CommandItem>
-                                          ))}
-                                          {form.watch('provider') !== 'thunderbolt' && (
-                                            <CommandItem value="custom" onSelect={() => handleSelectModel('custom')}>
-                                              <Check className={cn('mr-2 h-4 w-4', selectedModelId === 'custom' ? 'opacity-100' : 'opacity-0')} />
-                                              <span className="italic">Custom</span>
-                                            </CommandItem>
-                                          )}
-                                        </CommandGroup>
-                                      )
-                                    })()}
-                                </CommandList>
+                                        return (
+                                          <CommandGroup>
+                                            {filteredModels.map((model) => (
+                                              <CommandItem
+                                                key={model.id}
+                                                value={model.id}
+                                                onSelect={() => handleSelectModel(model.id)}
+                                              >
+                                                <Check
+                                                  className={cn(
+                                                    'mr-2 h-4 w-4',
+                                                    selectedModelId === model.id ? 'opacity-100' : 'opacity-0',
+                                                  )}
+                                                />
+                                                <div className="flex flex-col">
+                                                  <span>{model.name || model.id}</span>
+                                                  {model.name && (
+                                                    <span className="text-xs text-muted-foreground">{model.id}</span>
+                                                  )}
+                                                </div>
+                                              </CommandItem>
+                                            ))}
+                                            {form.watch('provider') !== 'thunderbolt' && (
+                                              <CommandItem value="custom" onSelect={() => handleSelectModel('custom')}>
+                                                <Check
+                                                  className={cn(
+                                                    'mr-2 h-4 w-4',
+                                                    selectedModelId === 'custom' ? 'opacity-100' : 'opacity-0',
+                                                  )}
+                                                />
+                                                <span className="italic">Custom</span>
+                                              </CommandItem>
+                                            )}
+                                          </CommandGroup>
+                                        )
+                                      })()}
+                                  </CommandList>
+                                </div>
                               </Command>
                             </PopoverContent>
                           </Popover>
@@ -697,58 +945,64 @@ export default function ModelsPage() {
                   />
                 )}
 
-                {/* Tool Usage Checkbox - Only show when model is selected */}
-                {(form.watch('model') || selectedModelId === 'custom') && (
-                  <FormField
-                    control={form.control}
-                    name="toolUsage"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                        <FormControl>
-                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                        <div className="space-y-1 leading-none">
-                          <FormLabel>Enable tool usage</FormLabel>
-                          <p className="text-sm text-muted-foreground">Allow this model to use tools and function calls. Disable if the model doesn't support tools.</p>
-                        </div>
-                      </FormItem>
-                    )}
+                {/* Warning when model lacks tool support */}
+                {!supportsToolsSelected && (form.watch('model') || selectedModelId === 'custom') && (
+                  <StatusCard
+                    title={
+                      <>
+                        <X className="h-5 w-5 text-red-600" />
+                        Model may not be compatible
+                      </>
+                    }
+                    description="This model does not seem to support tool usage."
                   />
                 )}
 
                 {/* Test Connection Button */}
                 {form.watch('model') && (
-                  <Button type="button" onClick={testConnection} disabled={isTestingConnection} variant="outline" className="w-full">
+                  <Button
+                    type="button"
+                    onClick={testConnection}
+                    disabled={isTestingConnection}
+                    variant="outline"
+                    className="w-full"
+                  >
                     {isTestingConnection ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Testing Connection...
+                        Testing Model...
                       </>
                     ) : (
-                      'Test Connection'
+                      'Test Model'
                     )}
                   </Button>
                 )}
 
                 {/* Connection Status Messages */}
                 {connectionStatus === 'success' && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center gap-2 text-green-800">
-                      <Check className="h-4 w-4" />
-                      <span className="font-medium">Connection successful!</span>
-                    </div>
-                    <p className="text-sm text-green-600 mt-1">The model is working correctly and ready to use.</p>
-                  </div>
+                  <StatusCard
+                    title={
+                      <>
+                        <Check className="h-5 w-5 text-green-600" />
+                        Test successful!
+                      </>
+                    }
+                    description="Successfully got a response from the model."
+                    className="border-green-200/50 dark:border-green-500/20"
+                  />
                 )}
 
                 {connectionStatus === 'error' && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <div className="flex items-center gap-2 text-red-800">
-                      <X className="h-4 w-4" />
-                      <span className="font-medium">Connection failed</span>
-                    </div>
-                    <p className="text-sm text-red-600 mt-1">{connectionError || 'Could not connect to the model. Please check your configuration.'}</p>
-                  </div>
+                  <StatusCard
+                    title={
+                      <>
+                        <X className="h-5 w-5 text-red-600" />
+                        Test failed
+                      </>
+                    }
+                    description={connectionError || 'Received an error while testing the model.'}
+                    className="bg-red-50/50 dark:bg-red-500/10 border-red-200/50 dark:border-red-500/20"
+                  />
                 )}
 
                 <div className="flex justify-end gap-3">
@@ -775,7 +1029,9 @@ export default function ModelsPage() {
               <CardHeader className="py-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="flex items-center justify-center bg-primary text-primary-foreground size-8 rounded-md font-medium flex-shrink-0">{getProviderInitial(model.provider)}</div>
+                    <div className="flex items-center justify-center bg-primary text-primary-foreground size-8 rounded-md font-medium flex-shrink-0">
+                      {getProviderInitial(model.provider)}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <CardTitle className="text-lg font-medium">{model.name}</CardTitle>
                       <p className="text-sm text-muted-foreground">
@@ -788,7 +1044,13 @@ export default function ModelsPage() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <div>
-                            <Switch checked={isEnabled} onCheckedChange={(checked) => toggleModelMutation.mutate({ id: model.id, enabled: checked })} className="cursor-pointer" />
+                            <Switch
+                              checked={isEnabled}
+                              onCheckedChange={(checked) =>
+                                toggleModelMutation.mutate({ id: model.id, enabled: checked })
+                              }
+                              className="cursor-pointer"
+                            />
                           </div>
                         </TooltipTrigger>
                         <TooltipContent side="bottom">
@@ -810,7 +1072,16 @@ export default function ModelsPage() {
                         </Tooltip>
                       </TooltipProvider>
                     ) : (
-                      <Popover open={deleteConfirmOpen === model.id} onOpenChange={(open) => setDeleteConfirmOpen(open ? model.id : null)}>
+                      <Popover
+                        open={deleteConfirmOpen === model.id}
+                        onOpenChange={(open) =>
+                          dispatch(
+                            open
+                              ? { type: 'OPEN_DELETE_CONFIRM', modelId: model.id }
+                              : { type: 'CLOSE_DELETE_CONFIRM' },
+                          )
+                        }
+                      >
                         <PopoverTrigger asChild>
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                             <Trash2 className="h-4 w-4" />
@@ -820,10 +1091,16 @@ export default function ModelsPage() {
                           <div className="space-y-3">
                             <div>
                               <h4 className="font-medium">Remove Model</h4>
-                              <p className="text-sm text-muted-foreground">Are you sure you want to remove this model? This action cannot be undone.</p>
+                              <p className="text-sm text-muted-foreground">
+                                Are you sure you want to remove this model? This action cannot be undone.
+                              </p>
                             </div>
                             <div className="flex justify-end gap-2">
-                              <Button variant="outline" size="sm" onClick={() => setDeleteConfirmOpen(null)}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => dispatch({ type: 'CLOSE_DELETE_CONFIRM' })}
+                              >
                                 Cancel
                               </Button>
                               <Button variant="destructive" size="sm" onClick={() => handleDeleteModel(model.id)}>
@@ -852,7 +1129,9 @@ export default function ModelsPage() {
                         <span className="text-sm font-mono truncate max-w-[300px]">{model.url}</span>
                       </div>
                     )}
-                    {model.provider === 'thunderbolt' && <div className="text-sm text-muted-foreground">Uses Thunderbolt cloud service</div>}
+                    {model.provider === 'thunderbolt' && (
+                      <div className="text-sm text-muted-foreground">Uses Thunderbolt cloud service</div>
+                    )}
                   </div>
                 </CardContent>
               )}
@@ -868,7 +1147,7 @@ export default function ModelsPage() {
               </div>
               <h3 className="font-medium text-foreground mb-1">No models configured</h3>
               <p className="text-sm text-muted-foreground mb-4">Get started by adding your first AI model.</p>
-              <Button onClick={() => setIsAddDialogOpen(true)} variant="outline">
+              <Button onClick={() => handleDialogOpenChange(true)} variant="outline">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Model
               </Button>

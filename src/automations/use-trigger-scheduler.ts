@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react'
 import { runAutomation } from './runner'
 
 export const useTriggerScheduler = () => {
-  const [isTriggersEnabled] = useBooleanSetting('triggers_is_enabled', false)
+  const [isTriggersEnabled] = useBooleanSetting('is_triggers_enabled', false)
   const timers = useRef<number[]>([])
 
   useEffect(() => {
