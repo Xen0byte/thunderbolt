@@ -1,8 +1,8 @@
-import { UIDataTypes, UIMessagePart } from 'ai'
+import { type TextUIPart } from 'ai'
 import { StreamingMarkdown } from './streaming-markdown'
 
 interface TextPartProps {
-  part: UIMessagePart<UIDataTypes>
+  part: TextUIPart
   isStreaming: boolean
 }
 

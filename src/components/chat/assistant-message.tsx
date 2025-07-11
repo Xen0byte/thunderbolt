@@ -9,29 +9,44 @@ interface AssistantMessageProps {
   isStreaming: boolean
 }
 
+// Animation classes for subtle slide-in effect
+const animationClasses = 'animate-in slide-in-from-bottom-2 fade-in duration-300 ease-out'
+
+const supportedPartTypes = ['reasoning', 'tool-invocation', 'text']
+
 export const AssistantMessage = ({ message, isStreaming }: AssistantMessageProps) => {
+  const filteredParts = message.parts.filter((part) => supportedPartTypes.includes(part.type))
+
+  const partElements = []
+
+  if (filteredParts.length === 0) {
+    partElements.push(<SyntheticLoadingPart isStreaming={true} />)
+  }
+
+  filteredParts.forEach((part, index) => {
+    const isLastPart = index === filteredParts.length - 1
+    const isPartStreaming = isStreaming && isLastPart
+
+    switch (part.type) {
+      case 'reasoning':
+        partElements.push(<ReasoningPart part={part} isStreaming={isPartStreaming} />)
+        break
+      case 'tool-invocation':
+        partElements.push(<ToolInvocationPart part={part} isStreaming={isPartStreaming} />)
+        break
+      case 'text':
+        partElements.push(<TextPart part={part} isStreaming={isPartStreaming} />)
+        break
+    }
+  })
+
   return (
-    <div className="flex flex-col gap-2 max-w-full">
-      <SyntheticLoadingPart isStreaming={message.parts.length === 0} />
-
-      {message.parts.map((part, partIdx) => {
-        const isLastPart = partIdx === message.parts.length - 1
-        const isPartStreaming = isStreaming && isLastPart
-
-        switch (part.type) {
-          case 'step-start':
-            return null
-          case 'text':
-            return <TextPart key={partIdx} part={part} isStreaming={isPartStreaming} />
-          case 'tool-invocation':
-            return <ToolInvocationPart key={partIdx} part={part} isStreaming={isPartStreaming} />
-          case 'reasoning':
-            return <ReasoningPart key={partIdx} part={part} isStreaming={isPartStreaming} />
-          default:
-            console.warn('Unknown part type', part)
-            return null
-        }
-      })}
+    <div className="space-y-2">
+      {partElements.map((part, index) => (
+        <div key={index} className={index === 1 ? '' : animationClasses}>
+          {part}
+        </div>
+      ))}
     </div>
   )
 }

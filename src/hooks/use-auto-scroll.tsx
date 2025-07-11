@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 // Constants for scroll behavior thresholds
 const SCROLL_THRESHOLD = {
   AWAY_FROM_BOTTOM: 100, // Distance in px to consider user has scrolled away
-  BACK_TO_BOTTOM: 10,    // Distance in px to consider user is back at bottom
+  BACK_TO_BOTTOM: 10, // Distance in px to consider user is back at bottom
 } as const
 
 interface UseAutoScrollOptions {
@@ -41,17 +41,17 @@ interface UseAutoScrollReturn {
 
 /**
  * useAutoScroll - A React hook for managing auto-scroll behavior in chat-like interfaces
- * 
+ *
  * Features:
  * - Automatically scrolls to bottom when new content is added
  * - Detects user scroll intent and pauses auto-scroll
  * - Re-engages auto-scroll when user returns to bottom
  * - Optimized for streaming content with instant scrolling option
  * - Uses Intersection Observer for performance
- * 
+ *
  * @param options Configuration options for the hook
  * @returns Refs and handlers to implement auto-scroll behavior
- * 
+ *
  * @example
  * ```tsx
  * const { scrollContainerRef, scrollTargetRef, scrollHandlers } = useAutoScroll({
@@ -59,7 +59,7 @@ interface UseAutoScrollReturn {
  *   dependencies: [messages],
  *   rootMargin: '0px 0px -50px 0px'
  * })
- * 
+ *
  * return (
  *   <div ref={scrollContainerRef} {...scrollHandlers}>
  *     {content}
@@ -68,17 +68,19 @@ interface UseAutoScrollReturn {
  * )
  * ```
  */
-export function useAutoScroll({ 
-  dependencies = [], 
-  smooth = true, 
-  isStreaming = false, 
-  onUserScroll, 
-  rootMargin = '0px' 
+export function useAutoScroll({
+  dependencies = [],
+  smooth = true,
+  isStreaming = false,
+  onUserScroll,
+  rootMargin = '0px',
 }: UseAutoScrollOptions = {}): UseAutoScrollReturn {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const scrollTargetRef = useRef<HTMLDivElement>(null)
   const [userHasScrolled, setUserHasScrolled] = useState(false)
   const [isAtBottom, setIsAtBottom] = useState(true)
+  // Track the previous scrollTop value to determine scroll direction
+  const prevScrollTopRef = useRef(0)
 
   // Utility to calculate distance from bottom
   const getDistanceFromBottom = useCallback(() => {
@@ -87,29 +89,45 @@ export function useAutoScroll({
     return scrollHeight - scrollTop - clientHeight
   }, [])
 
-  const scrollToBottom = useCallback((smoothScroll?: boolean) => {
-    const target = scrollTargetRef.current
-    if (!target) return
-    
-    try {
-      target.scrollIntoView({
-        behavior: (smoothScroll ?? (!isStreaming && smooth)) ? 'smooth' : 'auto',
-        block: 'end',
-      })
-    } catch (error) {
-      // Fallback for older browsers
-      scrollContainerRef.current?.scrollTo(0, scrollContainerRef.current.scrollHeight)
-    }
-  }, [smooth, isStreaming])
+  const scrollToBottom = useCallback(
+    (smoothScroll?: boolean) => {
+      const target = scrollTargetRef.current
+      if (!target) return
+
+      try {
+        target.scrollIntoView({
+          behavior: (smoothScroll ?? (!isStreaming && smooth)) ? 'smooth' : 'auto',
+          block: 'end',
+        })
+      } catch (error) {
+        // Fallback for older browsers
+        scrollContainerRef.current?.scrollTo(0, scrollContainerRef.current.scrollHeight)
+      }
+    },
+    [smooth, isStreaming],
+  )
 
   const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current) return
+
+    const { scrollTop } = scrollContainerRef.current
     const distanceFromBottom = getDistanceFromBottom()
-    
-    if (distanceFromBottom > SCROLL_THRESHOLD.AWAY_FROM_BOTTOM) {
+
+    // Determine if the user is scrolling up (intentional) or content is pushing down (automatic)
+    const isScrollingUp = scrollTop < prevScrollTopRef.current
+
+    // If the user scrolled up beyond the threshold, pause auto-scroll
+    if (isScrollingUp && distanceFromBottom > SCROLL_THRESHOLD.AWAY_FROM_BOTTOM) {
       setUserHasScrolled(true)
-    } else if (distanceFromBottom < SCROLL_THRESHOLD.BACK_TO_BOTTOM && userHasScrolled) {
+    }
+
+    // If we were previously paused and returned close enough to the bottom, resume auto-scroll
+    if (!isScrollingUp && distanceFromBottom < SCROLL_THRESHOLD.BACK_TO_BOTTOM && userHasScrolled) {
       setUserHasScrolled(false)
     }
+
+    // Update previous scrollTop for next comparison
+    prevScrollTopRef.current = scrollTop
   }, [userHasScrolled, getDistanceFromBottom])
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -124,7 +142,7 @@ export function useAutoScroll({
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
     const scrollTarget = scrollTargetRef.current
-    
+
     if (!scrollTarget || !scrollContainer) return
 
     const observer = new IntersectionObserver(
@@ -137,7 +155,7 @@ export function useAutoScroll({
         root: scrollContainer,
         rootMargin,
         threshold: 0,
-      }
+      },
     )
 
     observer.observe(scrollTarget)

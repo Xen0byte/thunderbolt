@@ -38,7 +38,7 @@ export const createPrompt = ({ preferredName, location }: PromptParams) => {
     `Is the message that I'm about to send to the user actually useful for a human or do I need to call more tools to make it useful?`,
 
     // —— Style guide ——
-    `Respond in Markdown that is pleasant, concise, and helpful. Use subheaders, bullet points, and bold / italics to help structure the response. Use emojis where appropriate.`,
+    `Respond in Markdown (no XML) that is pleasant, concise, and helpful. Use subheaders, bullet points, and bold / italics to help structure the response. Use emojis where appropriate.`,
     `Never invent information unless the user explicitly requests creative fiction.`,
   ]
 

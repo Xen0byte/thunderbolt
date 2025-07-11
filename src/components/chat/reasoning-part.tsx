@@ -1,9 +1,9 @@
-import { UIDataTypes, UIMessagePart } from 'ai'
+import type { ReasoningUIPart } from 'ai'
 import { Check, Loader2 } from 'lucide-react'
 import { Expandable } from '../ui/expandable'
 
 interface ReasoningPartProps {
-  part: UIMessagePart<UIDataTypes>
+  part: ReasoningUIPart
   isStreaming: boolean
 }
 
@@ -21,7 +21,7 @@ export const ReasoningPart = ({ part, isStreaming }: ReasoningPartProps) => {
       }
       defaultOpen={false}
     >
-      <div className="text-secondary-foreground leading-relaxed text-sm">{(part as any).text}</div>
+      <div className="text-secondary-foreground leading-relaxed text-sm">{part.text}</div>
     </Expandable>
   )
 }

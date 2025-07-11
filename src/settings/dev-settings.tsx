@@ -42,31 +42,29 @@ export default function DevSettingsPage() {
           {/* Divider between settings */}
           <div className="border-t -mx-6" />
 
-          {/* Tauri Fetch Setting */}
-          {isTauri() && (
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">Use Tauri Fetch</label>
-                <p className="text-sm text-muted-foreground">Proxy HTTP requests through Tauri to bypass CORS</p>
-              </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <Switch
-                      checked={tauriFetchEnabled}
-                      onCheckedChange={setTauriFetchEnabled}
-                      disabled={!capabilities?.native_fetch}
-                    />
-                  </span>
-                </TooltipTrigger>
-                {!capabilities?.native_fetch && (
-                  <TooltipContent sideOffset={4}>
-                    App must be built with the native_fetch feature flag to use this
-                  </TooltipContent>
-                )}
-              </Tooltip>
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium">Use Native Fetch</label>
+              <p className="text-sm text-muted-foreground">Proxy HTTP requests through Tauri to bypass CORS</p>
             </div>
-          )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Switch
+                    checked={tauriFetchEnabled}
+                    onCheckedChange={setTauriFetchEnabled}
+                    disabled={!capabilities?.native_fetch}
+                  />
+                </span>
+              </TooltipTrigger>
+              {!capabilities?.native_fetch && (
+                <TooltipContent sideOffset={4}>
+                  This feature is only available on some desktop versions of the app that were built with the
+                  native_fetch feature flag.
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </div>
         </div>
       </SectionCard>
     </div>

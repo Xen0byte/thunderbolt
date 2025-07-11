@@ -82,122 +82,126 @@ export default function AutomationsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4 px-8 w-full max-w-[1200px] mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-bold tracking-tight">Automations</h1>
-        <Button size="icon" onClick={() => setIsCreateModalOpen(true)}>
-          <Plus className="h-4 w-4" />
-        </Button>
-      </div>
-
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search automations..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
-        />
-      </div>
-
-      {/* Content */}
-      <div className="flex-1">
-        {isLoading && prompts.length === 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Card key={i}>
-                <CardContent className="p-4">
-                  <Skeleton className="h-4 w-full mb-2" />
-                  <Skeleton className="h-4 w-3/4 mb-4" />
-                  <Skeleton className="h-px w-full mb-4" />
-                  <div className="flex justify-end gap-2">
-                    <Skeleton className="h-8 w-8" />
-                    <Skeleton className="h-8 w-8" />
-                    <Skeleton className="h-8 w-8" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-6 p-4 px-8 w-full max-w-[1200px] mx-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <h1 className="text-4xl font-bold tracking-tight">Automations</h1>
+            <Button size="icon" onClick={() => setIsCreateModalOpen(true)}>
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
-        ) : prompts.length === 0 ? (
-          debouncedSearchQuery ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Search className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No matching results</h3>
-              <p className="text-muted-foreground mb-4 max-w-md">
-                No automations found matching "{debouncedSearchQuery}". Try adjusting your search terms.
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Plus className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No automations yet</h3>
-              <p className="text-muted-foreground mb-4 max-w-md">
-                Create your first automation to get started. Automations can be triggered by time or other events.
-              </p>
-              <Button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Create First Automation
-              </Button>
-            </div>
-          )
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {prompts.map((prompt) => (
-              <PromptCard
-                key={prompt.id}
-                prompt={prompt}
-                triggersEnabled={triggersEnabled}
-                onRun={handleRunPrompt}
-                onEdit={handleEditPrompt}
-                onDelete={handleDeletePrompt}
-              />
-            ))}
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search automations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
           </div>
-        )}
+
+          {/* Content */}
+          <div className="flex-1">
+            {isLoading && prompts.length === 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Card key={i}>
+                    <CardContent className="p-4">
+                      <Skeleton className="h-4 w-full mb-2" />
+                      <Skeleton className="h-4 w-3/4 mb-4" />
+                      <Skeleton className="h-px w-full mb-4" />
+                      <div className="flex justify-end gap-2">
+                        <Skeleton className="h-8 w-8" />
+                        <Skeleton className="h-8 w-8" />
+                        <Skeleton className="h-8 w-8" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : prompts.length === 0 ? (
+              debouncedSearchQuery ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <Search className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No matching results</h3>
+                  <p className="text-muted-foreground mb-4 max-w-md">
+                    No automations found matching "{debouncedSearchQuery}". Try adjusting your search terms.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <Plus className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No automations yet</h3>
+                  <p className="text-muted-foreground mb-4 max-w-md">
+                    Create your first automation to get started. Automations can be triggered by time or other events.
+                  </p>
+                  <Button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    Create First Automation
+                  </Button>
+                </div>
+              )
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {prompts.map((prompt) => (
+                  <PromptCard
+                    key={prompt.id}
+                    prompt={prompt}
+                    triggersEnabled={triggersEnabled}
+                    onRun={handleRunPrompt}
+                    onEdit={handleEditPrompt}
+                    onDelete={handleDeletePrompt}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Create Modal */}
+          <AutomationFormModal
+            isOpen={isCreateModalOpen}
+            onOpenChange={setIsCreateModalOpen}
+            onSuccess={() => setIsCreateModalOpen(false)}
+          />
+
+          {/* Edit Modal */}
+          <AutomationFormModal
+            isOpen={!!editingPrompt}
+            onOpenChange={(open) => !open && setEditingPrompt(null)}
+            prompt={editingPrompt}
+            onSuccess={() => {
+              setEditingPrompt(null)
+            }}
+          />
+
+          {/* Delete Confirmation */}
+          <AlertDialog open={!!deletingPromptId} onOpenChange={(open) => !open && setDeletingPromptId(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Automation</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete this automation? This action cannot be undone and will also remove any
+                  associated triggers.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deletePromptMutation.isPending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => deletingPromptId && deletePromptMutation.mutate(deletingPromptId)}
+                  disabled={deletePromptMutation.isPending}
+                  className="bg-destructive text-white hover:bg-destructive/90"
+                >
+                  {deletePromptMutation.isPending ? 'Deleting...' : 'Delete'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
-
-      {/* Create Modal */}
-      <AutomationFormModal
-        isOpen={isCreateModalOpen}
-        onOpenChange={setIsCreateModalOpen}
-        onSuccess={() => setIsCreateModalOpen(false)}
-      />
-
-      {/* Edit Modal */}
-      <AutomationFormModal
-        isOpen={!!editingPrompt}
-        onOpenChange={(open) => !open && setEditingPrompt(null)}
-        prompt={editingPrompt}
-        onSuccess={() => {
-          setEditingPrompt(null)
-        }}
-      />
-
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deletingPromptId} onOpenChange={(open) => !open && setDeletingPromptId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Automation</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this automation? This action cannot be undone and will also remove any
-              associated triggers.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletePromptMutation.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deletingPromptId && deletePromptMutation.mutate(deletingPromptId)}
-              disabled={deletePromptMutation.isPending}
-              className="bg-destructive text-white hover:bg-destructive/90"
-            >
-              {deletePromptMutation.isPending ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

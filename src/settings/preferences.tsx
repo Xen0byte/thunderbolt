@@ -408,11 +408,7 @@ export default function PreferencesSettingsPage() {
           <p className="text-sm text-muted-foreground">Delete all of your local data.</p>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                disabled={isResetting}
-                className="border-destructive text-destructive hover:bg-destructive hover:text-primary-foreground"
-              >
+              <Button variant="secondary" disabled={isResetting}>
                 {isResetting ? 'Resetting...' : 'Reset Database'}
               </Button>
             </AlertDialogTrigger>

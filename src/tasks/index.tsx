@@ -481,111 +481,115 @@ export default function TasksPage() {
   const showEmptyState = !isLoading && !isPlaceholderData && totalCount === 0 && !searchQuery && !isAddingNew
 
   return (
-    <div className="flex flex-col gap-6 p-4 px-8 w-full max-w-[1200px] mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-bold tracking-tight">Tasks</h1>
-        {!showEmptyState && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button size="icon" onClick={() => setIsAddingNew(true)} disabled={isAddingNew}>
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Add Task</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-      </div>
-
-      {/* Search - always visible to maintain focus and avoid flicker */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search tasks..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
-        />
-      </div>
-
-      {showEmptyState ? (
-        <div className="flex items-center justify-center p-16">
-          <div className="text-center max-w-sm">
-            <div className="bg-primary/10 p-4 rounded-full mb-4 inline-block">
-              <CheckCircle2 className="h-12 w-12 text-primary" />
-            </div>
-            <h3 className="text-xl font-semibold mb-6">No tasks yet</h3>
-            <Button onClick={() => setIsAddingNew(true)} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Your First Task
-            </Button>
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-6 p-4 px-8 w-full max-w-[1200px] mx-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <h1 className="text-4xl font-bold tracking-tight">Tasks</h1>
+            {!showEmptyState && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="icon" onClick={() => setIsAddingNew(true)} disabled={isAddingNew}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Add Task</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {isLoading ? (
-            <div className="space-y-2">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center gap-3 p-3">
-                  <Skeleton className="h-5 w-5 rounded" />
-                  <Skeleton className="h-5 flex-1" />
-                  <Skeleton className="h-5 w-5 rounded" />
+
+          {/* Search - always visible to maintain focus and avoid flicker */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          {showEmptyState ? (
+            <div className="flex items-center justify-center p-16">
+              <div className="text-center max-w-sm">
+                <div className="bg-primary/10 p-4 rounded-full mb-4 inline-block">
+                  <CheckCircle2 className="h-12 w-12 text-primary" />
                 </div>
-              ))}
+                <h3 className="text-xl font-semibold mb-6">No tasks yet</h3>
+                <Button onClick={() => setIsAddingNew(true)} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add Your First Task
+                </Button>
+              </div>
             </div>
           ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext items={orderedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {isLoading ? (
                 <div className="space-y-2">
-                  {isAddingNew && <NewTaskInput onAdd={handleAddTask} onCancel={() => setIsAddingNew(false)} />}
-
-                  {orderedTasks.map((task) => (
-                    <TaskItem
-                      key={task.id}
-                      task={task}
-                      isCompleting={completingTasks.has(task.id)}
-                      onComplete={handleCompleteTask}
-                      onEdit={handleEditTask}
-                      onDelete={handleDeleteTask}
-                    />
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3">
+                      <Skeleton className="h-5 w-5 rounded" />
+                      <Skeleton className="h-5 flex-1" />
+                      <Skeleton className="h-5 w-5 rounded" />
+                    </div>
                   ))}
-
-                  {tasks.length === 0 && searchQuery && (
-                    <div className="text-center py-12 text-muted-foreground">
-                      No tasks found matching "{searchQuery}"
-                    </div>
-                  )}
-
-                  {totalCount > 50 && (
-                    <div className="text-center py-4 text-sm text-muted-foreground">
-                      Showing 50 of {totalCount} tasks
-                    </div>
-                  )}
                 </div>
-              </SortableContext>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={orderedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-2">
+                      {isAddingNew && <NewTaskInput onAdd={handleAddTask} onCancel={() => setIsAddingNew(false)} />}
 
-              <DragOverlay dropAnimation={dropAnimation}>
-                {activeTask && (
-                  <div className="flex items-center gap-3 rounded-lg bg-background px-3 py-2 shadow-lg border">
-                    <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    <span className="flex-1 text-sm">{activeTask.item}</span>
-                    <Square className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                )}
-              </DragOverlay>
-            </DndContext>
+                      {orderedTasks.map((task) => (
+                        <TaskItem
+                          key={task.id}
+                          task={task}
+                          isCompleting={completingTasks.has(task.id)}
+                          onComplete={handleCompleteTask}
+                          onEdit={handleEditTask}
+                          onDelete={handleDeleteTask}
+                        />
+                      ))}
+
+                      {tasks.length === 0 && searchQuery && (
+                        <div className="text-center py-12 text-muted-foreground">
+                          No tasks found matching "{searchQuery}"
+                        </div>
+                      )}
+
+                      {totalCount > 50 && (
+                        <div className="text-center py-4 text-sm text-muted-foreground">
+                          Showing 50 of {totalCount} tasks
+                        </div>
+                      )}
+                    </div>
+                  </SortableContext>
+
+                  <DragOverlay dropAnimation={dropAnimation}>
+                    {activeTask && (
+                      <div className="flex items-center gap-3 rounded-lg bg-background px-3 py-2 shadow-lg border">
+                        <GripVertical className="h-4 w-4 text-muted-foreground" />
+                        <span className="flex-1 text-sm">{activeTask.item}</span>
+                        <Square className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    )}
+                  </DragOverlay>
+                </DndContext>
+              )}
+            </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
