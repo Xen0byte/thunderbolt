@@ -23,9 +23,7 @@ export function convertDbChatMessageToUIMessage(message: ChatMessage): UIMessage
     id: message.id,
     parts: message.parts ?? [],
     role: message.role,
-    metadata: {
-      createdAt: uuidv7ToDate(message.id),
-    },
+    metadata: {},
   }
 }
 
@@ -189,6 +187,20 @@ export function formatDate(timestamp: number): string {
   }
 
   return d.format('MMM D, YYYY')
+}
+
+/**
+ * Format large numbers with k/M/B abbreviations using Intl.NumberFormat
+ * @param num The number to format
+ * @returns Formatted string like "256K" or "1.2M"
+ */
+export const formatNumber = (num: number): string => {
+  const formatter = new Intl.NumberFormat('en', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  })
+
+  return formatter.format(num)
 }
 
 /**

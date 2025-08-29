@@ -91,6 +91,7 @@ export default function NewModelPage() {
       toolUsage: 1,
       isConfidential: 0,
       startWithReasoning: 0,
+      contextWindow: null,
     })
   }
 

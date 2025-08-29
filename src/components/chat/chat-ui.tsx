@@ -1,16 +1,21 @@
 import { useAutoScroll } from '@/hooks/use-auto-scroll'
+import { useContextTracking } from '@/hooks/use-context-tracking'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { trackEvent } from '@/lib/analytics'
+import { getOrCreateChatThread } from '@/lib/dal'
 import { cn } from '@/lib/utils'
 import { Model, type Prompt, type ThunderboltUIMessage } from '@/types'
 import type { UseChatHelpers } from '@ai-sdk/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
+import { ContextOverflowModal } from '../context-overflow-modal'
+import { ContextUsageIndicator } from '../context-usage-indicator'
 import { Button } from '../ui/button'
 import { PromptInput } from '../ui/prompt-input'
 import { AssistantMessage } from './assistant-message'
 import { TriggerMessage } from './trigger-message'
 import { UserMessage } from './user-message'
-import { trackEvent } from '@/lib/analytics'
 
 interface ChatUIProps {
   chatHelpers: UseChatHelpers<ThunderboltUIMessage>
@@ -18,6 +23,7 @@ interface ChatUIProps {
   selectedModelId?: string
   onModelChange: (model: string | null) => void
   triggerPrompt?: Prompt
+  chatThreadId?: string
 }
 
 interface SuggestionButtonProps {
@@ -59,13 +65,31 @@ const SuggestionButtons = ({ onSelectPrompt }: { onSelectPrompt: (prompt: string
   )
 }
 
-export default function ChatUI({ chatHelpers, models, selectedModelId, onModelChange, triggerPrompt }: ChatUIProps) {
+export default function ChatUI({
+  chatHelpers,
+  models,
+  selectedModelId,
+  onModelChange,
+  triggerPrompt,
+  chatThreadId,
+}: ChatUIProps) {
   const [hasMessages, setHasMessages] = useState(chatHelpers.messages.length > 0)
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false)
   const [input, setInput] = useState('')
+  const [showOverflowModal, setShowOverflowModal] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
   const previousMessageCountRef = useRef(chatHelpers.messages.length)
+  const navigate = useNavigate()
   const isMobile = useIsMobile()
+
+  const selectedModel = models.find((m) => m.id === selectedModelId) || models[0]
+
+  const { usedTokens, maxTokens, isContextKnown, isOverflowing } = useContextTracking({
+    model: selectedModel,
+    chatThreadId,
+    currentInput: input,
+    onOverflow: () => setShowOverflowModal(true),
+  })
 
   const {
     scrollContainerRef,
@@ -141,6 +165,16 @@ export default function ChatUI({ chatHelpers, models, selectedModelId, onModelCh
     const textToSend = input.trim()
     if (isStreaming || !textToSend) return
 
+    if (isOverflowing) {
+      setShowOverflowModal(true)
+      trackEvent('chat_send_prompt_overflow', {
+        model: selectedModelId,
+        length: textToSend.length,
+        prompt_number: chatHelpers.messages.length + 1,
+      })
+      return
+    }
+
     trackEvent('chat_send_prompt', {
       model: selectedModelId,
       length: textToSend.length,
@@ -150,8 +184,7 @@ export default function ChatUI({ chatHelpers, models, selectedModelId, onModelCh
     // Clear the input immediately for responsive UX
     setInput('')
 
-    // Kick off sending without blocking UI
-    void chatHelpers.sendMessage({ text: textToSend })
+    await chatHelpers.sendMessage({ text: textToSend })
 
     // Reset user scroll state and scroll to bottom when submitting a new message
     resetUserScroll()
@@ -166,6 +199,11 @@ export default function ChatUI({ chatHelpers, models, selectedModelId, onModelCh
         textareaElement.focus()
       }
     }, 0)
+  }
+
+  const handleNewChat = async () => {
+    const chatThreadId = await getOrCreateChatThread()
+    await navigate(`/chats/${chatThreadId}`)
   }
 
   return (
@@ -276,6 +314,9 @@ export default function ChatUI({ chatHelpers, models, selectedModelId, onModelCh
               autoFocus
               submitOnEnter={!isStreaming}
               className="flex flex-col gap-2 bg-secondary p-4 rounded-md w-full"
+              footerStartElements={
+                isContextKnown && <ContextUsageIndicator usedTokens={usedTokens ?? 0} maxTokens={maxTokens ?? 0} />
+              }
             />
           </motion.div>
 
@@ -294,6 +335,13 @@ export default function ChatUI({ chatHelpers, models, selectedModelId, onModelCh
           )}
         </motion.div>
       </motion.div>
+
+      <ContextOverflowModal
+        isOpen={showOverflowModal}
+        onClose={() => setShowOverflowModal(false)}
+        maxTokens={maxTokens ?? undefined}
+        onNewChat={handleNewChat}
+      />
     </div>
   )
 }

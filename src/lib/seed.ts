@@ -37,7 +37,9 @@ export const seedModels = async () => {
         isSystem: 1,
         enabled: 1,
         isConfidential: 1,
+        contextWindow: 256000,
         toolUsage: 1,
+        // No contextWindow or tokenizer - this model doesn't support context tracking
       },
       {
         id: '0198ecc5-cc2b-735b-b478-7c6770371b84',
@@ -47,6 +49,8 @@ export const seedModels = async () => {
         isSystem: 0,
         enabled: 1,
         isConfidential: 0,
+        contextWindow: 256000,
+        tokenizer: 'qwen3',
       },
       {
         id: '0198ecc5-cc2b-735b-b478-80dcfed4ea97',
@@ -57,33 +61,8 @@ export const seedModels = async () => {
         enabled: 1,
         isConfidential: 0,
         startWithReasoning: 1,
-      },
-      {
-        id: '0198ecc5-cc2b-735b-b478-8550bca67aa7',
-        name: 'Kimi K2',
-        provider: 'thunderbolt' as const,
-        model: 'kimi-k2-instruct',
-        isSystem: 0,
-        enabled: 1,
-        isConfidential: 0,
-      },
-      {
-        id: '0198ecc5-cc2b-735b-b478-88f3ef5f54e2',
-        name: 'DeepSeek R1',
-        provider: 'thunderbolt' as const,
-        model: 'deepseek-r1-0528',
-        isSystem: 0,
-        enabled: 1,
-        isConfidential: 0,
-      },
-      {
-        id: '0198ecc5-cc2b-735b-b478-8c857f947106',
-        name: 'Llama 3.1',
-        provider: 'thunderbolt' as const,
-        model: 'llama-v3p1-405b-instruct',
-        isSystem: 0,
-        enabled: 1,
-        isConfidential: 0,
+        contextWindow: 256000,
+        tokenizer: 'qwen3',
       },
     ]
     for (const model of seedData) {

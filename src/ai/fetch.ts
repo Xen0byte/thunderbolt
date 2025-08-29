@@ -203,13 +203,14 @@ export const aiFetchStreamingResponse = async ({
           console.groupEnd()
         })
       },
-      onFinish: (finish) => {
+      onFinish: async (finish) => {
         if (process.env.NODE_ENV === 'test') return
 
         console.log('finish', {
           text: finish.text,
           finishReason: finish.finishReason,
           toolCallCount: finish.toolCalls?.length || 0,
+          usage: finish.totalUsage,
         })
       },
       onError: (error) => {
@@ -222,8 +223,25 @@ export const aiFetchStreamingResponse = async ({
 
     return result.toUIMessageStreamResponse<ThunderboltUIMessage>({
       sendReasoning: true,
-      // Attach the modelId as metadata so the client knows which model was used
-      messageMetadata: () => ({ modelId }),
+      messageMetadata: ({ part }) => {
+        switch (part.type) {
+          case 'finish-step':
+            return {
+              modelId,
+              usage: part.usage,
+            }
+          case 'finish':
+            return {
+              modelId,
+              // If you wanted to get the total usage for the entire conversation, you could do this:
+              // usage: part.totalUsage,
+            }
+          default:
+            return {
+              modelId,
+            }
+        }
+      },
     })
   } catch (error) {
     console.error('aiFetchStreamingResponse error', error)
