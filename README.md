@@ -99,10 +99,14 @@ make format-check
 ## Run
 
 ```sh
-bun tauri dev
+# Recommended: Run with libsql for development
+bun tauri:libsql
+
+# Alternative: Run with no Cargo features (minimal build)
+bun tauri:dev
 ```
 
-### Enabling optional Rust features (e.g. libsql)
+### Enabling optional Rust features
 
 The Rust backend is built with **Cargo features**. By default **no optional
 features are enabled**, which keeps the binary size small and avoids pulling in
@@ -120,14 +124,17 @@ You can pass features to any `tauri` CLI command by adding a `--` separator —
 everything after it is forwarded to `cargo`:
 
 ```sh
-# Run the app with default features
-bun tauri dev
+# Run with libsql (recommended for development)
+bun run tauri:libsql
+
+# Run with all optional features
+bun tauri dev -- --features all
+
+# Run with specific features
+bun tauri dev -- --features libsql,email
 
 # Build a production bundle with all optional features
 bun tauri build -- --features all
-
-# If you ever need to explicitly remove default features in the future:
-bun tauri dev -- --no-default-features --features libsql,email
 ```
 
 Note: when a feature is not compiled in, its corresponding commands are
@@ -138,8 +145,8 @@ simply unavailable in the UI.
 ## Run Android
 
 ```sh
-# Libsql will cause build errors when compiling for Android
-bun tauri android dev -- --no-default-features --features native_fetch
+# Android builds work with default (empty) features
+bun tauri android dev
 ```
 
 ## Run Rust Examples
