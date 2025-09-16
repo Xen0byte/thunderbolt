@@ -1,4 +1,4 @@
-import { DatabaseInterface, type AnyDrizzleDatabase } from './database-interface'
+import type { DatabaseInterface, AnyDrizzleDatabase } from './database-interface'
 import { LibSQLTauriDatabase } from './libsql-tauri-database'
 import { SQLocalDatabase } from './sqlocal-database'
 
@@ -28,7 +28,13 @@ export class DatabaseSingleton {
    * @param type - The database type to use ('sqlocal' or 'libsql-tauri')
    * @param config - Configuration for the database
    */
-  public async initialize({ type = 'sqlocal', path }: { type?: DatabaseType; path: string }): Promise<AnyDrizzleDatabase> {
+  public async initialize({
+    type = 'sqlocal',
+    path,
+  }: {
+    type?: DatabaseType
+    path: string
+  }): Promise<AnyDrizzleDatabase> {
     if (DatabaseSingleton.#initialized && this.#database) {
       return this.#database.db
     }

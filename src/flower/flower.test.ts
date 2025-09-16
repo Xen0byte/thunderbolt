@@ -1,6 +1,6 @@
+import { createFlowerMiddleware } from '@/src/ai/middleware/default'
 import { streamText, wrapLanguageModel } from 'ai'
 import { describe, expect, it } from 'bun:test'
-import { createDefaultMiddleware } from '@/src/ai/middleware/default'
 import { createFlowerProvider, type FlowerChatArgs, type FlowerClient, type FlowerProviderOptions } from './flower'
 
 type MockFlowerClient = FlowerClient & {
@@ -16,15 +16,21 @@ const makeMockFlowerClient = (chunks: string[]): MockFlowerClient => {
     async chat(args: FlowerChatArgs) {
       capturedArgs = args
       if (!args.stream) {
-        return { content: chunks.join('') }
+        return {
+          ok: true as const,
+          message: { content: chunks.join('') },
+        }
       }
       // Simulate streaming
       for (const chunk of chunks) {
         await new Promise<void>((r) => setTimeout(r, 0))
         args.onStreamEvent?.({ chunk })
       }
-      // Return undefined for streaming mode
-      return undefined
+      // Return the final result (this is how real Flower API works)
+      return {
+        ok: true as const,
+        message: { content: chunks.join('') },
+      }
     },
   }
 }
@@ -45,7 +51,7 @@ describe('Flower provider unit tests', () => {
     const { provider, mock } = withProvider(['Hello', ' ', 'world!'])
     const model = provider('qwen/qwen3-235b')
 
-    const wrapped = wrapLanguageModel({ model, middleware: createDefaultMiddleware(false) })
+    const wrapped = wrapLanguageModel({ model, middleware: createFlowerMiddleware(false) })
     const result = streamText({ model: wrapped, prompt: 'ping' })
 
     await result.consumeStream()
@@ -62,7 +68,7 @@ describe('Flower provider unit tests', () => {
     const { provider } = withProvider(chunks)
     const model = provider('qwen/qwen3-235b')
 
-    const wrapped = wrapLanguageModel({ model, middleware: createDefaultMiddleware(false) })
+    const wrapped = wrapLanguageModel({ model, middleware: createFlowerMiddleware(false) })
     const result = streamText({ model: wrapped, prompt: 'ping' })
 
     await result.consumeStream()

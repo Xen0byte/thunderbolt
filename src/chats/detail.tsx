@@ -1,16 +1,18 @@
-import { chatMessagesTable, chatThreadsTable } from '@/db/tables'
-import { useDatabase } from '@/hooks/use-database'
+import { chatThreadsTable } from '@/db/tables'
+import { DatabaseSingleton } from '@/db/singleton'
+import { getChatThreadById, saveMessagesWithContextUpdate } from '@/lib/dal'
 import { generateTitle } from '@/lib/title-generator'
-import { convertDbChatMessageToUIMessage, convertUIMessageToDbChatMessage } from '@/lib/utils'
-import { SaveMessagesFunction, type ThunderboltUIMessage } from '@/types'
+import { convertDbChatMessageToUIMessage } from '@/lib/utils'
+import type { SaveMessagesFunction, ThunderboltUIMessage } from '@/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { useParams } from 'react-router'
 import Chat from './chat'
+import { getChatMessagesByThreadId } from '@/lib/dal'
 
 export default function ChatDetailPage() {
   const params = useParams()
-  const { db } = useDatabase()
+  const db = DatabaseSingleton.instance.db
   const queryClient = useQueryClient()
 
   const updateThreadTitle = async (messages: ThunderboltUIMessage[], threadId: string) => {
@@ -32,6 +34,7 @@ export default function ChatDetailPage() {
       console.error('Error generating title:', error)
     }
   }
+
   const {
     data: messages,
     isLoading,
@@ -39,11 +42,7 @@ export default function ChatDetailPage() {
   } = useQuery<ThunderboltUIMessage[], Error>({
     queryKey: ['chatMessages', params.chatThreadId],
     queryFn: async () => {
-      const chatMessages = await db
-        .select()
-        .from(chatMessagesTable)
-        .where(eq(chatMessagesTable.chatThreadId, params.chatThreadId!))
-        .orderBy(chatMessagesTable.id)
+      const chatMessages = await getChatMessagesByThreadId(params.chatThreadId!)
       return chatMessages.map(convertDbChatMessageToUIMessage) as ThunderboltUIMessage[]
     },
     enabled: !!params.chatThreadId,
@@ -55,33 +54,19 @@ export default function ChatDetailPage() {
         throw new Error('No chat thread ID')
       }
 
-      // Fetch thread info first
-      const thread = await db.select().from(chatThreadsTable).where(eq(chatThreadsTable.id, params.chatThreadId!)).get()
+      // Save messages and update context size using DAL
+      const dbChatMessages = await saveMessagesWithContextUpdate(params.chatThreadId, messages)
 
-      if (!thread) {
-        throw new Error('Thread not found')
-      }
-
-      // Map UI messages to DB messages, using modelId from metadata when available
-      const dbChatMessages = messages.map((message) => convertUIMessageToDbChatMessage(message, params.chatThreadId!))
-
-      // Insert messages
-      await db
-        .insert(chatMessagesTable)
-        .values(dbChatMessages)
-        .onConflictDoUpdate({
-          target: chatMessagesTable.id,
-          set: {
-            content: sql`excluded.content`,
-            parts: sql`excluded.parts`,
-            role: sql`excluded.role`,
-          },
-        })
+      // Fetch thread info to check if we need to generate a title
+      const thread = await getChatThreadById(params.chatThreadId)
 
       // Generate title in background if needed
-      if (thread.title === 'New Chat') {
-        updateThreadTitle(messages, params.chatThreadId!)
+      if (thread?.title === 'New Chat') {
+        updateThreadTitle(messages, params.chatThreadId)
       }
+
+      // Invalidate context size query to trigger re-fetch
+      queryClient.invalidateQueries({ queryKey: ['contextSize', params.chatThreadId] })
 
       return dbChatMessages
     },

@@ -12,7 +12,12 @@ pub struct DbPool {
 }
 
 impl DbPool {
-    pub async fn new(path: &str, encryption_key: Option<String>, pool_size: usize, app_handle: &tauri::AppHandle) -> Result<Self> {
+    pub async fn new(
+        path: &str,
+        encryption_key: Option<String>,
+        pool_size: usize,
+        app_handle: &tauri::AppHandle,
+    ) -> Result<Self> {
         // Ensure directory exists
         if let Some(parent) = std::path::PathBuf::from(path).parent() {
             std::fs::create_dir_all(parent)?;
@@ -54,25 +59,27 @@ impl DbPool {
             let extension_path = resource_path.join("resources").join("crsqlite.dylib");
             if extension_path.exists() {
                 println!("🔍 Found crsqlite.dylib at: {:?}", extension_path);
-                
+
                 // Enable extension loading
                 match first_conn.load_extension_enable() {
                     Ok(_) => {
                         println!("✅ Extension loading enabled");
-                        
+
                         // Load the cr-sqlite extension
-                        match first_conn.load_extension(&extension_path, Some("sqlite3_crsqlite_init")) {
+                        match first_conn
+                            .load_extension(&extension_path, Some("sqlite3_crsqlite_init"))
+                        {
                             Ok(_) => {
                                 println!("✅ cr-sqlite extension loaded successfully!");
                                 println!("🎉 You can now use cr-sqlite functions like crsql_as_crr() in your database!");
                             }
-                            Err(e) => eprintln!("❌ Failed to load cr-sqlite extension: {}", e)
+                            Err(e) => eprintln!("❌ Failed to load cr-sqlite extension: {}", e),
                         }
-                        
+
                         // Disable extension loading for security
                         let _ = first_conn.load_extension_disable();
                     }
-                    Err(e) => eprintln!("❌ Failed to enable extension loading: {}", e)
+                    Err(e) => eprintln!("❌ Failed to enable extension loading: {}", e),
                 }
             } else {
                 eprintln!("❌ crsqlite.dylib not found at: {:?}", extension_path);
@@ -110,4 +117,4 @@ impl DbPool {
     pub fn get_database(&self) -> Arc<Database> {
         self.database.clone()
     }
-} 
+}

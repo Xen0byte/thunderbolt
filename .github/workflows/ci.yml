@@ -16,6 +16,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Detect file changes to optimize CI performance (THU-28)
+  # Skip Rust build step when no Rust-related files have changed
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect changed files
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            rust:
+              - 'src-tauri/**/*.rs'
+              - 'src-tauri/**/Cargo.toml'
+              - 'src-tauri/**/Cargo.lock'
+              - 'src-tauri/build.rs'
+              - 'src-tauri/rust-toolchain.toml'
+              - 'src-tauri/.cargo/**'
+
   typescript:
     runs-on: ubuntu-latest
     permissions:
@@ -84,8 +107,8 @@ jobs:
       - name: Type check
         run: bun run tsc --noEmit
 
-      # - name: Lint  
-      #   run: bun run lint
+      - name: Lint
+        run: bun run lint
 
       - name: Run tests
         run: |
@@ -98,7 +121,25 @@ jobs:
           # TODO: Investigate Bun module mocking behavior in CI environment
           bun test --test-name-pattern="^(?!.*Google Utils).*$"
 
+      # Upload source maps to PostHog only for main branch
+      - name: Build application with source maps
+        if: github.ref == 'refs/heads/main'
+        run: bun run build
+        env:
+          NODE_ENV: production
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Inject & upload source maps to PostHog
+        if: github.ref == 'refs/heads/main'
+        uses: PostHog/upload-source-maps@v0.4.6
+        with:
+          directory: dist
+          env-id: ${{ secrets.POSTHOG_CLI_ENV_ID }}
+          cli-token: ${{ secrets.POSTHOG_CLI_TOKEN }}
+
   rust:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -152,7 +193,6 @@ jobs:
           cargo build --all-targets
           cargo clippy --all-targets -- -D warnings
           cargo test
-
 
   backend:
     runs-on: ubuntu-latest

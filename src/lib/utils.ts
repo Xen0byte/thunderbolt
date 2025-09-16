@@ -1,13 +1,13 @@
-import { ChatMessage, ParsedEmail, ParsedEmailHeader, UIMessageMetadata } from '@/types'
-import { UIMessage } from 'ai'
+import type { ChatMessage, ParsedEmail, ParsedEmailHeader, UIMessageMetadata } from '@/types'
+import type { UIMessage } from 'ai'
 import { clsx, type ClassValue } from 'clsx'
 import dayjs from 'dayjs'
 import { twMerge } from 'tailwind-merge'
 import {
-  CamelCasedProperties,
-  CamelCasedPropertiesDeep,
-  SnakeCasedProperties,
-  SnakeCasedPropertiesDeep,
+  type CamelCasedProperties,
+  type CamelCasedPropertiesDeep,
+  type SnakeCasedProperties,
+  type SnakeCasedPropertiesDeep,
 } from 'type-fest'
 
 export function cn(...inputs: ClassValue[]) {
@@ -23,9 +23,7 @@ export function convertDbChatMessageToUIMessage(message: ChatMessage): UIMessage
     id: message.id,
     parts: message.parts ?? [],
     role: message.role,
-    metadata: {
-      createdAt: uuidv7ToDate(message.id),
-    },
+    metadata: {},
   }
 }
 
@@ -189,6 +187,20 @@ export function formatDate(timestamp: number): string {
   }
 
   return d.format('MMM D, YYYY')
+}
+
+/**
+ * Format large numbers with k/M/B abbreviations using Intl.NumberFormat
+ * @param num The number to format
+ * @returns Formatted string like "256K" or "1.2M"
+ */
+export const formatNumber = (num: number): string => {
+  const formatter = new Intl.NumberFormat('en', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  })
+
+  return formatter.format(num)
 }
 
 /**

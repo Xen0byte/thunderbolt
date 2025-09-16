@@ -15,7 +15,7 @@ import { promptsTable, triggersTable } from '@/db/tables'
 import { useBooleanSetting } from '@/hooks/use-setting'
 import { getAvailableModels, getSelectedModel } from '@/lib/dal'
 import { generateTitle } from '@/lib/title-generator'
-import { Model, type Prompt } from '@/types'
+import type { Model, Prompt } from '@/types'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { eq } from 'drizzle-orm'
@@ -23,6 +23,7 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { v7 as uuidv7 } from 'uuid'
 import { z } from 'zod'
+import { trackEvent } from '@/lib/analytics'
 
 const formSchema = z.object({
   title: z.string().optional(),
@@ -51,12 +52,12 @@ export default function AutomationFormModal({
   const queryClient = useQueryClient()
 
   const { data: models = [] } = useQuery<Model[]>({
-    queryKey: ['availableModels'],
+    queryKey: ['models', 'availableModels'],
     queryFn: getAvailableModels,
   })
 
   const { data: selectedModel } = useQuery<Model>({
-    queryKey: ['selectedModel'],
+    queryKey: ['models', 'selectedModel'],
     queryFn: getSelectedModel,
   })
 
@@ -161,7 +162,11 @@ export default function AutomationFormModal({
         })
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, values) => {
+      trackEvent('automation_create', {
+        model: values.modelId,
+        triggerType: values.triggerType,
+      })
       queryClient.invalidateQueries({ queryKey: ['prompts'] })
       onOpenChange(false)
       onSuccess?.()
@@ -215,7 +220,12 @@ export default function AutomationFormModal({
         }
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, values) => {
+      trackEvent('automation_update', {
+        automation_id: prompt?.id,
+        old_model: prompt?.modelId,
+        new_model: values.modelId,
+      })
       queryClient.invalidateQueries({ queryKey: ['prompts'] })
       queryClient.invalidateQueries({ queryKey: ['triggers'] })
       onOpenChange(false)

@@ -22,29 +22,38 @@ export const seedAccounts = async () => {
 export const seedModels = async () => {
   const db = DatabaseSingleton.instance.db
   const models = await db.select().from(modelsTable)
+
   if (models.length === 0) {
+    /**
+     * Using hardwired IDs to ensure consistency across installs.
+     * New items should follow the pattern and have their ID hardwired.
+     */
     const seedData = [
       {
-        id: uuidv7(),
+        id: '0198ecc5-cc2b-735b-b478-785b85d3c731',
         name: 'Qwen 3',
         provider: 'flower' as const,
         model: 'qwen/qwen3-235b',
         isSystem: 1,
         enabled: 1,
         isConfidential: 1,
+        contextWindow: 256000,
         toolUsage: 1,
+        tokenizer: 'qwen3',
       },
       {
-        id: uuidv7(),
+        id: '0198ecc5-cc2b-735b-b478-7c6770371b84',
         name: 'Qwen 3',
         provider: 'thunderbolt' as const,
         model: 'qwen3-235b-a22b-instruct-2507',
         isSystem: 0,
         enabled: 1,
         isConfidential: 0,
+        contextWindow: 256000,
+        tokenizer: 'qwen3',
       },
       {
-        id: uuidv7(),
+        id: '0198ecc5-cc2b-735b-b478-80dcfed4ea97',
         name: 'Qwen 3 (Thinking)',
         provider: 'thunderbolt' as const,
         model: 'qwen3-235b-a22b-thinking-2507',
@@ -52,33 +61,8 @@ export const seedModels = async () => {
         enabled: 1,
         isConfidential: 0,
         startWithReasoning: 1,
-      },
-      {
-        id: uuidv7(),
-        name: 'Kimi K2',
-        provider: 'thunderbolt' as const,
-        model: 'kimi-k2-instruct',
-        isSystem: 0,
-        enabled: 1,
-        isConfidential: 0,
-      },
-      {
-        id: uuidv7(),
-        name: 'DeepSeek R1',
-        provider: 'thunderbolt' as const,
-        model: 'deepseek-r1-0528',
-        isSystem: 0,
-        enabled: 1,
-        isConfidential: 0,
-      },
-      {
-        id: uuidv7(),
-        name: 'Llama 3.1',
-        provider: 'thunderbolt' as const,
-        model: 'llama-v3p1-405b-instruct',
-        isSystem: 0,
-        enabled: 1,
-        isConfidential: 0,
+        contextWindow: 256000,
+        tokenizer: 'qwen3',
       },
     ]
     for (const model of seedData) {
@@ -89,6 +73,7 @@ export const seedModels = async () => {
 
 export const seedSettings = async () => {
   const db = DatabaseSingleton.instance.db
+
   await db
     .insert(settingsTable)
     .values({
@@ -138,21 +123,25 @@ export const seedTasks = async () => {
     return
   }
 
+  /**
+   * Using hardwired IDs to ensure consistency across installs.
+   * New items should follow the pattern and have their ID hardwired.
+   */
   const seedData = [
     {
-      id: uuidv7(),
+      id: '0198ecc5-cc2b-735b-b478-93f8db7202ce',
       item: 'Connect your email account to get started',
       order: 100,
       isComplete: 0,
     },
     {
-      id: uuidv7(),
+      id: '0198ecc5-cc2b-735b-b478-96071aa92f62',
       item: 'Set your name and location in preferences for better AI responses',
       order: 200,
       isComplete: 0,
     },
     {
-      id: uuidv7(),
+      id: '0198ecc5-cc2b-735b-b478-99e9874d61ba',
       item: 'Explore Thunderbolt Pro tools to extend capabilities',
       order: 300,
       isComplete: 0,
@@ -181,9 +170,13 @@ export const seedPrompts = async () => {
     return
   }
 
+  /**
+   * Using hardwired IDs to ensure consistency across installs.
+   * New items should follow the pattern and have their ID hardwired.
+   */
   const seedData = [
     {
-      id: uuidv7(),
+      id: '0198ecc5-cc2b-735b-b478-9ff7f5b047d3',
       title: 'Daily Brief',
       prompt: `Create a daily brief with the following sections. Do not ask me for any missing information - just skip sections for which you are missing information or tools.
 
@@ -223,7 +216,7 @@ Do not show skipped sections at all, even placeholders - just skip them entirely
       modelId: defaultModelId,
     },
     {
-      id: uuidv7(),
+      id: '0198ecc5-cc2b-735b-b478-a17c00778369',
       title: 'Deep Research',
       prompt: `You are **Deep Research**, an expert analyst who can iteratively SEARCH the web and FETCH full documents.
 
@@ -307,7 +300,7 @@ Begin now.`,
       modelId: defaultModelId,
     },
     {
-      id: uuidv7(),
+      id: '0198ecc5-cc2b-735b-b478-a61c73ab50d6',
       title: 'Important Emails',
       prompt: `Review my inbox and summarize the 5 most important emails that need my attention today. Include sender, subject, and why each is important.`,
       modelId: defaultModelId,

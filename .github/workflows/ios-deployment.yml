@@ -1,0 +1,215 @@
+name: iOS Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (optional)'
+        required: false
+        type: string
+      notify_testers:
+        description: 'Notify external testers'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_deploy_ios:
+    runs-on: macos-latest
+    environment: thunderbolt_release
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
+        with:
+          node-version: 'lts/*'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust stable toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
+        with:
+          toolchain: stable
+          cache: false
+          rustflags: ''
+
+      - name: Cache Cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-ios-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-ios-
+            ${{ runner.os }}-cargo-
+
+      - name: Install iOS target
+        run: rustup target add aarch64-apple-ios
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@60606e260d2fc5762a71e64e74b2174e8ea3c8bd # v1.6.0
+        with:
+          xcode-version: latest-stable
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+          bundler-cache: true
+          working-directory: src-tauri/gen/apple
+
+      - name: Install Fastlane
+        working-directory: src-tauri/gen/apple
+        run: |
+          bundle install
+
+      - name: Setup Apple certificates and provisioning profiles
+        working-directory: src-tauri/gen/apple
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          PROVISIONING_PROFILE: ${{ secrets.APP_STORE_PROVISIONING_PROFILE }}
+        run: |
+          # Validate required secrets
+          if [ -z "$APPLE_CERTIFICATE_P12" ]; then
+            echo "❌ APPLE_CERTIFICATE_P12 secret is not set"
+            exit 1
+          fi
+
+          if [ -z "$APPLE_CERTIFICATE_PASSWORD" ]; then
+            echo "❌ APPLE_CERTIFICATE_PASSWORD secret is not set"
+            exit 1
+          fi
+
+          if [ -z "$PROVISIONING_PROFILE" ]; then
+            echo "❌ PROVISIONING_PROFILE secret is not set"
+            exit 1
+          fi
+
+          # Create certificates directory
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+
+          # Decode and install certificate
+          echo "📋 Decoding certificate..."
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > certificate.p12
+
+          # Validate certificate file
+          if [ ! -s certificate.p12 ]; then
+            echo "❌ Failed to decode certificate or certificate is empty"
+            exit 1
+          fi
+
+          echo "✅ Certificate decoded successfully ($(wc -c < certificate.p12) bytes)"
+
+          # Create temporary keychain
+          echo "🔐 Creating temporary keychain..."
+          security create-keychain -p "temp-keychain-password" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "temp-keychain-password" build.keychain
+          security list-keychains -d user -s build.keychain login.keychain
+
+          # Import certificate to keychain with better error handling
+          echo "📥 Importing certificate to keychain..."
+          if ! security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign; then
+            echo "❌ Failed to import certificate. Common issues:"
+            echo "   - Incorrect certificate password"
+            echo "   - Certificate file is corrupted"
+            echo "   - Certificate format is not supported"
+            echo "   - Certificate has expired"
+            exit 1
+          fi
+
+          echo "✅ Certificate imported successfully"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "temp-keychain-password" build.keychain
+
+          # Install provisioning profile
+          echo "📱 Installing provisioning profile..."
+          echo "$PROVISIONING_PROFILE" | base64 --decode > profile.mobileprovision
+
+          # Validate provisioning profile
+          if [ ! -s profile.mobileprovision ]; then
+            echo "❌ Failed to decode provisioning profile or profile is empty"
+            exit 1
+          fi
+
+          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+          echo "✅ Provisioning profile installed successfully"
+
+          # Clean up sensitive files
+          rm certificate.p12 profile.mobileprovision
+          echo "🧹 Cleaned up sensitive files"
+
+      - name: Setup App Store Connect API Key
+        working-directory: src-tauri/gen/apple
+        env:
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: |
+          mkdir -p fastlane
+          echo "$APP_STORE_CONNECT_API_KEY" | base64 --decode > fastlane/AuthKey_$APP_STORE_CONNECT_API_KEY_ID.p8
+
+      - name: Install frontend dependencies
+        run: bun install
+
+      - name: Build frontend
+        run: bun run build
+        env:
+          VITE_THUNDERBOLT_CLOUD_URL: ${{ vars.VITE_THUNDERBOLT_CLOUD_URL }}
+
+      - name: Build and deploy to TestFlight
+        working-directory: src-tauri/gen/apple
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MATCH_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          NOTIFY_TESTERS: ${{ github.event.inputs.notify_testers || 'false' }}
+          VERSION_INPUT: ${{ github.event.inputs.version }}
+        run: |
+          echo "🧪 Building for TestFlight beta..."
+          bundle exec fastlane beta
+
+      - name: Upload build artifacts (if build fails)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs-${{ github.run_id }}
+          path: |
+            src-tauri/gen/apple/fastlane/logs/
+            src-tauri/gen/apple/*.log
+            ~/Library/Logs/gym/
+          retention-days: 7
+
+      - name: Clean up keychain
+        if: always()
+        run: |
+          security delete-keychain build.keychain || true
+
+      - name: Clean up sensitive files
+        if: always()
+        working-directory: src-tauri/gen/apple
+        run: |
+          rm -f fastlane/AuthKey_*.p8
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
+
+      - name: Notify success
+        if: success()
+        run: |
+          echo "🚀 iOS app successfully uploaded to TestFlight!"
+          echo "Check App Store Connect for the new build."
+
+      - name: Notify failure
+        if: failure()
+        run: |
+          echo "❌ iOS build failed. Check the logs above for details."
+          echo "Common issues: certificate problems, provisioning profile issues, or build errors."

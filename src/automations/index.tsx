@@ -11,17 +11,18 @@ import {
 import { Button } from '@/components/ui/button'
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group'
 import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { SearchInput } from '@/components/ui/search-input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { DatabaseSingleton } from '@/db/singleton'
 import { promptsTable, triggersTable } from '@/db/tables'
-import { useDebounce } from '@/hooks/use-debounce'
 import { useBooleanSetting } from '@/hooks/use-setting'
+import { trackEvent } from '@/lib/analytics'
+import { getAllPrompts } from '@/lib/dal'
 import { cn } from '@/lib/utils'
 import type { Prompt, Trigger } from '@/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { asc, eq, like } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { Pen, Play, Plus, Search, Trash2 } from 'lucide-react'
 import { memo, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -33,26 +34,15 @@ export default function AutomationsPage() {
 
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [searchQuery, setSearchQuery] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null)
   const [deletingPromptId, setDeletingPromptId] = useState<string | null>(null)
-  const debouncedSearchQuery = useDebounce(searchQuery, 50)
+
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
 
   const { data: prompts = [], isLoading } = useQuery({
     queryKey: ['prompts', debouncedSearchQuery],
-    queryFn: async (): Promise<Prompt[]> => {
-      if (debouncedSearchQuery) {
-        return db
-          .select()
-          .from(promptsTable)
-          .where(like(promptsTable.prompt, `%${debouncedSearchQuery}%`))
-          .orderBy(asc(promptsTable.id))
-          .limit(50)
-      }
-
-      return db.select().from(promptsTable).orderBy(asc(promptsTable.id)).limit(50)
-    },
+    queryFn: () => getAllPrompts(debouncedSearchQuery),
     placeholderData: (previousData) => previousData,
   })
 
@@ -66,19 +56,35 @@ export default function AutomationsPage() {
       await db.delete(promptsTable).where(eq(promptsTable.id, promptId))
     },
     onSuccess: () => {
+      trackEvent('automation_delete_confirmed', { automation_id: deletingPromptId })
       queryClient.invalidateQueries({ queryKey: ['prompts'] })
       setDeletingPromptId(null)
     },
   })
 
-  const handleRunPrompt = (promptId: string) => runAutomation(promptId, navigate).catch(console.error)
+  const handleRunPrompt = async (promptId: string) => {
+    try {
+      const prompt = prompts.find((p) => p.id === promptId)
+
+      await runAutomation(promptId, navigate)
+      trackEvent('automation_run', {
+        automation_id: promptId,
+        model: prompt?.modelId,
+        length: prompt?.prompt.length,
+      })
+    } catch (error) {
+      console.error(error)
+    }
+  }
 
   const handleEditPrompt = (prompt: Prompt) => {
     setEditingPrompt(prompt)
+    trackEvent('automation_modal_edit_open', { automation_id: prompt.id })
   }
 
   const handleDeletePrompt = (promptId: string) => {
     setDeletingPromptId(promptId)
+    trackEvent('automation_delete_clicked', { automation_id: promptId })
   }
 
   return (
@@ -88,21 +94,22 @@ export default function AutomationsPage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <h1 className="mt-8 text-4xl font-bold tracking-tight">Automations</h1>
-            <Button size="icon" onClick={() => setIsCreateModalOpen(true)}>
+            <Button
+              size="icon"
+              onClick={() => {
+                setIsCreateModalOpen(true)
+                trackEvent('automation_modal_create_open')
+              }}
+            >
               <Plus className="h-4 w-4" />
             </Button>
           </div>
 
           {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search automations..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+          <SearchInput
+            placeholder="Search automations..."
+            debouncedOnChange={(value) => setDebouncedSearchQuery(value)}
+          />
 
           {/* Content */}
           <div className="flex-1">
@@ -184,14 +191,17 @@ export default function AutomationsPage() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete Automation</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Are you sure you want to delete this automation? This action cannot be undone and will also remove any
-                  associated triggers.
+                  Are you sure you want to delete this automation? This cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={deletePromptMutation.isPending}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={() => deletingPromptId && deletePromptMutation.mutate(deletingPromptId)}
+                  onClick={() => {
+                    if (deletingPromptId) {
+                      deletePromptMutation.mutate(deletingPromptId)
+                    }
+                  }}
                   disabled={deletePromptMutation.isPending}
                   className="bg-destructive text-white hover:bg-destructive/90"
                 >

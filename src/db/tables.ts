@@ -1,5 +1,5 @@
-import { ParsedEmail } from '@/types'
-import { UIMessage } from 'ai'
+import type { ParsedEmail } from '@/types'
+import type { UIMessage } from 'ai'
 import { sql } from 'drizzle-orm'
 import { customType, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
@@ -30,12 +30,13 @@ export const chatThreadsTable = sqliteTable('chat_threads', {
   id: text('id').primaryKey().notNull().unique(),
   title: text('title'),
   isEncrypted: integer('is_encrypted').default(0).notNull(),
-  triggeredBy: text('triggered_by').references(() => promptsTable.id),
+  triggeredBy: text('triggered_by').references(() => promptsTable.id, { onDelete: 'set null' }),
+  wasTriggeredByAutomation: integer('was_triggered_by_automation').default(0).notNull(),
+  contextSize: integer('context_size'),
 })
 
 export const chatMessagesTable = sqliteTable('chat_messages', {
   id: text('id').primaryKey().notNull().unique(),
-  // createdat can be derived from uuid v7 id
   content: text('content').notNull(),
   role: text('role').notNull().$type<UIMessage['role']>(),
   parts: text('parts', { mode: 'json' }).$type<UIMessage['parts']>(),
@@ -99,7 +100,7 @@ export const tasksTable = sqliteTable('tasks', {
 export const modelsTable = sqliteTable('models', {
   id: text('id').primaryKey().notNull().unique(),
   provider: text('provider', {
-    enum: ['openai', 'custom', 'openrouter', 'thunderbolt', 'flower'],
+    enum: ['openai', 'custom', 'openrouter', 'thunderbolt', 'anthropic', 'flower'],
   }).notNull(),
   name: text('name').notNull(),
   model: text('model').notNull(),
@@ -110,6 +111,7 @@ export const modelsTable = sqliteTable('models', {
   toolUsage: integer('tool_usage').default(1).notNull(),
   isConfidential: integer('is_confidential').default(0).notNull(),
   startWithReasoning: integer('start_with_reasoning').default(0).notNull(),
+  contextWindow: integer('context_window'),
 })
 
 export const embeddingsTable = sqliteTable('embeddings', {

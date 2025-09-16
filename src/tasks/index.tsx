@@ -1,19 +1,18 @@
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { SearchInput } from '@/components/ui/search-input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { tasksTable } from '@/db/tables'
-import { useDatabase } from '@/hooks/use-database'
-import { useDebounce } from '@/hooks/use-debounce'
+import { DatabaseSingleton } from '@/db/singleton'
 import { cn } from '@/lib/utils'
-import { Task } from '@/types'
+import type { Task } from '@/types'
 import type { DropAnimation } from '@dnd-kit/core'
 import {
   closestCenter,
   DndContext,
-  DragEndEvent,
+  type DragEndEvent,
   DragOverlay,
-  DragStartEvent,
+  type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -28,10 +27,12 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { and, asc, desc, eq, like, sql } from 'drizzle-orm'
-import { CheckCircle2, GripVertical, Plus, Search, Square } from 'lucide-react'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { eq } from 'drizzle-orm'
+import { CheckCircle2, GripVertical, Plus, Square } from 'lucide-react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { v7 as uuidv7 } from 'uuid'
+import { trackEvent } from '@/lib/analytics'
+import { getIncompleteTasks, getIncompleteTasksCount } from '@/lib/dal'
 
 // Task Item Component - Memoized for performance
 interface TaskItemProps {
@@ -79,7 +80,7 @@ const TaskItem = memo(({ task, isCompleting, onComplete, onEdit, onDelete }: Tas
   }, [task.item])
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
         e.preventDefault()
         handleSaveEdit()
@@ -241,17 +242,16 @@ const NewTaskInput = ({ onAdd, onCancel }: NewTaskInputProps) => {
 
 // Main Tasks Page Component
 export default function TasksPage() {
-  const { db } = useDatabase()
+  const db = DatabaseSingleton.instance.db
   const queryClient = useQueryClient()
 
   // State
-  const [searchQuery, setSearchQuery] = useState('')
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [completingTasks, setCompletingTasks] = useState<Set<string>>(new Set())
   const [activeId, setActiveId] = useState<string | null>(null)
   const [optimisticOrder, setOptimisticOrder] = useState<string[]>([])
 
-  const debouncedSearchQuery = useDebounce(searchQuery, 30)
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -278,21 +278,7 @@ export default function TasksPage() {
     isPlaceholderData,
   } = useQuery({
     queryKey: ['tasks', debouncedSearchQuery],
-    queryFn: async () => {
-      const query = db
-        .select()
-        .from(tasksTable)
-        .where(
-          debouncedSearchQuery
-            ? and(eq(tasksTable.isComplete, 0), like(tasksTable.item, `%${debouncedSearchQuery}%`))
-            : eq(tasksTable.isComplete, 0),
-        )
-        .orderBy(asc(tasksTable.order), desc(tasksTable.id))
-        .limit(50)
-
-      const result = await query
-      return result.filter((task) => task.item && task.item.trim() !== '')
-    },
+    queryFn: () => getIncompleteTasks(debouncedSearchQuery),
     placeholderData: (previousData) => previousData,
   })
 
@@ -317,14 +303,8 @@ export default function TasksPage() {
 
   // Count total tasks
   const { data: totalCount = 0 } = useQuery({
-    queryKey: ['tasks-count'],
-    queryFn: async () => {
-      const [{ count }] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(tasksTable)
-        .where(eq(tasksTable.isComplete, 0))
-      return count
-    },
+    queryKey: ['tasks', 'count'],
+    queryFn: getIncompleteTasksCount,
   })
 
   // Mutations
@@ -339,9 +319,9 @@ export default function TasksPage() {
         isComplete: 0,
       })
     },
-    onSuccess: () => {
+    onSuccess: (_, item) => {
+      trackEvent('task_add', { task_length: item.length })
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['tasks-count'] })
     },
   })
 
@@ -349,7 +329,8 @@ export default function TasksPage() {
     mutationFn: async ({ id, item }: { id: string; item: string }) => {
       await db.update(tasksTable).set({ item }).where(eq(tasksTable.id, id))
     },
-    onSuccess: () => {
+    onSuccess: (_, values) => {
+      trackEvent('task_update_text', { task_id: values.id, new_length: values.item.length })
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
@@ -360,7 +341,6 @@ export default function TasksPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['tasks-count'] })
     },
   })
 
@@ -370,15 +350,21 @@ export default function TasksPage() {
         updates.map(({ id, order }) => db.update(tasksTable).set({ order }).where(eq(tasksTable.id, id))),
       )
     },
+    onSuccess: (_, updates) => {
+      trackEvent('task_reorder', {
+        moved_task_id: updates[0].id,
+        total_tasks: updates.length,
+      })
+    },
   })
 
   const completeTaskMutation = useMutation({
     mutationFn: async (id: string) => {
       await db.update(tasksTable).set({ isComplete: 1 }).where(eq(tasksTable.id, id))
     },
-    onSuccess: () => {
+    onSuccess: (_, id) => {
+      trackEvent('task_mark_complete', { task_id: id })
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['tasks-count'] })
     },
   })
 
@@ -478,7 +464,7 @@ export default function TasksPage() {
   const activeTask = useMemo(() => tasks.find((t) => t.id === activeId), [tasks, activeId])
 
   // Check if we should show empty state
-  const showEmptyState = !isLoading && !isPlaceholderData && totalCount === 0 && !searchQuery && !isAddingNew
+  const showEmptyState = !isLoading && !isPlaceholderData && totalCount === 0 && !debouncedSearchQuery && !isAddingNew
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -504,15 +490,15 @@ export default function TasksPage() {
           </div>
 
           {/* Search - always visible to maintain focus and avoid flicker */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search tasks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+          <SearchInput
+            placeholder="Search tasks..."
+            debouncedOnChange={(value) => {
+              setDebouncedSearchQuery(value)
+              if (value.trim()) {
+                trackEvent('task_search', { query_length: value.length })
+              }
+            }}
+          />
 
           {showEmptyState ? (
             <div className="flex items-center justify-center p-16">
@@ -561,9 +547,9 @@ export default function TasksPage() {
                         />
                       ))}
 
-                      {tasks.length === 0 && searchQuery && (
+                      {tasks.length === 0 && debouncedSearchQuery && (
                         <div className="text-center py-12 text-muted-foreground">
-                          No tasks found matching "{searchQuery}"
+                          No tasks found matching "{debouncedSearchQuery}"
                         </div>
                       )}
 

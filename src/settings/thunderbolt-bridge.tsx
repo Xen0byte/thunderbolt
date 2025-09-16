@@ -1,25 +1,26 @@
 import { settingsTable } from '@/db/tables'
-import { useDatabase } from '@/hooks/use-database'
+import { DatabaseSingleton } from '@/db/singleton'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-shell'
 import { eq } from 'drizzle-orm'
 import { Loader2, Wifi, WifiOff } from 'lucide-react'
-import React from 'react'
+import { useState, useEffect } from 'react'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { getBridgeSettings } from '@/lib/dal'
 
 export default function ThunderboltBridgeSettingsPage() {
-  const { db } = useDatabase()
+  const db = DatabaseSingleton.instance.db
   const queryClient = useQueryClient()
-  const [isInitializing, setIsInitializing] = React.useState(false)
-  const [bridgeEnabled, setBridgeEnabled] = React.useState(false)
-  const [isConnected, setIsConnected] = React.useState(false)
-  const [connectionStatus, setConnectionStatus] = React.useState<{
+  const [isInitializing, setIsInitializing] = useState(false)
+  const [bridgeEnabled, setBridgeEnabled] = useState(false)
+  const [isConnected, setIsConnected] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<{
     websocket_server_initialized: boolean
     mcp_receiver_initialized: boolean
     thunderbird_connected: boolean
@@ -28,17 +29,12 @@ export default function ThunderboltBridgeSettingsPage() {
 
   // Get bridge settings from database
   const { data: settings, isLoading } = useQuery({
-    queryKey: ['bridge-settings'],
-    queryFn: async () => {
-      const enabledData = await db.select().from(settingsTable).where(eq(settingsTable.key, 'bridge_enabled'))
-      return {
-        enabled: enabledData[0]?.value === 'true',
-      }
-    },
+    queryKey: ['settings', 'bridge_enabled'],
+    queryFn: getBridgeSettings,
   })
 
   // Check bridge status periodically
-  React.useEffect(() => {
+  useEffect(() => {
     const checkStatus = async () => {
       try {
         const status = await invoke<boolean>('get_bridge_status')
@@ -62,7 +58,7 @@ export default function ThunderboltBridgeSettingsPage() {
   }, [])
 
   // Initialize bridge when settings load
-  React.useEffect(() => {
+  useEffect(() => {
     const initBridge = async () => {
       if (settings && !isInitializing) {
         setIsInitializing(true)
@@ -100,7 +96,7 @@ export default function ThunderboltBridgeSettingsPage() {
     },
     onSuccess: (enabled) => {
       setBridgeEnabled(enabled)
-      queryClient.invalidateQueries({ queryKey: ['bridge-settings'] })
+      queryClient.invalidateQueries({ queryKey: ['settings', 'bridge_enabled'] })
     },
   })
 

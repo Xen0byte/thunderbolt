@@ -1,5 +1,5 @@
 import { EllipsisVertical, LogOut, Settings } from 'lucide-react'
-import * as React from 'react'
+import { type ButtonHTMLAttributes } from 'react'
 import { Link } from 'react-router'
 
 import { Button } from '@/components/ui/button'
@@ -7,12 +7,17 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { SidebarMenuButton } from './sidebar'
 
-interface UserNavButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface UserNavButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   username?: string
   userEmail?: string
 }
 
-export function UserNavButton({ username = 'John Doe', userEmail = 'john.doe@example.com', className, ...props }: UserNavButtonProps) {
+export function UserNavButton({
+  username = 'John Doe',
+  userEmail = 'john.doe@example.com',
+  className,
+  ...props
+}: UserNavButtonProps) {
   return (
     <SidebarMenuButton className={cn('relative', className)} {...props}>
       <Button variant="ghost" className="flex items-center gap-2 h-10 px-3 group">

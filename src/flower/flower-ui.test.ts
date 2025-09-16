@@ -1,6 +1,6 @@
+import { createFlowerMiddleware } from '@/src/ai/middleware/default'
 import { readUIMessageStream, streamText, wrapLanguageModel, type UIMessage } from 'ai'
 import { describe, expect, it } from 'bun:test'
-import { createDefaultMiddleware } from '@/src/ai/middleware/default'
 import { createFlowerProvider, type FlowerChatArgs, type FlowerClient } from './flower'
 
 type MockFlowerClient = FlowerClient & {
@@ -10,7 +10,13 @@ type MockFlowerClient = FlowerClient & {
 /**
  * Mock Flower client that simulates streaming responses
  */
-const createMockFlowerClient = (chunks: string[], options?: { includeThinkTags?: boolean }): MockFlowerClient => {
+const createMockFlowerClient = (
+  chunks: string[],
+  options?: {
+    includeThinkTags?: boolean
+    usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number }
+  },
+): MockFlowerClient => {
   let capturedArgs: FlowerChatArgs | null = null
 
   const responseChunks = options?.includeThinkTags
@@ -33,12 +39,22 @@ const createMockFlowerClient = (chunks: string[], options?: { includeThinkTags?:
     async chat(args: FlowerChatArgs) {
       capturedArgs = args
       if (!args.stream) {
-        return { content: responseChunks.join('') }
+        return {
+          ok: true as const,
+          message: { content: responseChunks.join('') },
+          usage: options?.usage,
+        }
       }
       // Simulate streaming
       for (const chunk of responseChunks) {
         await new Promise<void>((r) => setTimeout(r, 0))
         args.onStreamEvent?.({ chunk })
+      }
+      // Return the final result with usage data (this is how real Flower API works)
+      return {
+        ok: true as const,
+        message: { content: responseChunks.join('') },
+        usage: options?.usage,
       }
     },
   }
@@ -54,7 +70,7 @@ const streamToUIMessage = async (
 ): Promise<UIMessage> => {
   const wrappedModel = wrapLanguageModel({
     model,
-    middleware: createDefaultMiddleware(options?.startWithReasoning ?? false),
+    middleware: createFlowerMiddleware(options?.startWithReasoning ?? false),
   })
 
   const result = streamText({
@@ -65,7 +81,24 @@ const streamToUIMessage = async (
   // Convert to UI message stream
   const uiStream = result.toUIMessageStream({
     sendReasoning: true,
-    messageMetadata: () => ({ modelId: 'flower-test' }),
+    messageMetadata: ({ part }) => {
+      switch (part.type) {
+        case 'finish-step':
+          return {
+            modelId: 'flower-test',
+            usage: part.usage,
+          }
+        case 'finish':
+          return {
+            modelId: 'flower-test',
+            usage: part.totalUsage,
+          }
+        default:
+          return {
+            modelId: 'flower-test',
+          }
+      }
+    },
   })
 
   // Read the full UI message
@@ -163,7 +196,7 @@ describe('Flower provider UI message conversion', () => {
 
     // Pre-configure the mock client (simulating what createConfiguredFlowerClient would do)
     mockClient.apiKey = 'my-api-key-123'
-    mockClient.baseUrl = 'http://localhost:8000/flower/v1' 
+    mockClient.baseUrl = 'http://localhost:8000/flower/v1'
     mockClient.remoteHandoff = true
 
     const provider = createFlowerProvider({
@@ -202,7 +235,7 @@ describe('Flower provider UI message conversion', () => {
     const model = provider('qwen/qwen3-235b')
     const wrappedModel = wrapLanguageModel({
       model,
-      middleware: createDefaultMiddleware(false),
+      middleware: createFlowerMiddleware(false),
     })
 
     const result = streamText({
@@ -266,5 +299,28 @@ describe('Flower provider UI message conversion', () => {
       const reasoningPart = uiMessage.parts.find((p) => p.type === 'reasoning')
       expect(reasoningPart).toBeDefined()
     }
+  })
+
+  it('includes usage data in message metadata', async () => {
+    const usageData = { promptTokens: 10, completionTokens: 20, totalTokens: 30 }
+    const mockClient = createMockFlowerClient(['Hello!'], { usage: usageData })
+
+    const provider = createFlowerProvider({
+      client: mockClient,
+      apiKey: 'test-key',
+      baseUrl: 'http://localhost:8000/flower/v1',
+    })
+
+    const model = provider('qwen/qwen3-235b')
+    const uiMessage = await streamToUIMessage(model, 'Usage test')
+
+    expect(uiMessage.metadata).toBeDefined()
+    const metadata = uiMessage.metadata as {
+      usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
+    }
+    expect(metadata.usage).toBeDefined()
+    expect(metadata.usage?.inputTokens).toBe(10)
+    expect(metadata.usage?.outputTokens).toBe(20)
+    expect(metadata.usage?.totalTokens).toBe(30)
   })
 })

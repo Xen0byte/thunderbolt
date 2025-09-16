@@ -16,13 +16,14 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { mcpServersTable } from '@/db/tables'
-import { useDatabase } from '@/hooks/use-database'
+import { DatabaseSingleton } from '@/db/singleton'
 import { useMcpSync } from '@/hooks/use-mcp-sync'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { eq } from 'drizzle-orm'
 import { Check, Copy, Globe, Plus, Trash2, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { v7 as uuidv7 } from 'uuid'
+import { getHttpMcpServers } from '@/lib/dal'
 
 interface McpServer {
   id: string
@@ -38,7 +39,7 @@ interface ServerTools {
 }
 
 export default function McpServersPage() {
-  const { db } = useDatabase()
+  const db = DatabaseSingleton.instance.db
   const queryClient = useQueryClient()
   const { servers: mcpServers } = useMcpSync()
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -55,19 +56,7 @@ export default function McpServersPage() {
   // TODO: Add support for stdio servers
   const { data: servers = [] } = useQuery({
     queryKey: ['mcp-servers'],
-    queryFn: async (): Promise<McpServer[]> => {
-      const allServers = await db.select().from(mcpServersTable)
-      return allServers
-        .filter((server) => server.type === 'http' && server.url !== null)
-        .map((server) => ({
-          id: server.id,
-          name: server.name,
-          url: server.url as string,
-          enabled: server.enabled,
-          createdAt: server.createdAt,
-          updatedAt: server.updatedAt,
-        }))
-    },
+    queryFn: getHttpMcpServers,
   })
 
   // Fetch tools for connected servers
@@ -231,7 +220,7 @@ export default function McpServersPage() {
     addServerMutation.mutate({ name, url: newServerUrl })
   }
 
-  const handleUrlKeyDown = (e: React.KeyboardEvent) => {
+  const handleUrlKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault()
       if (connectionStatus === 'idle' && newServerUrl) {

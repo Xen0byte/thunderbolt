@@ -1,7 +1,7 @@
 import { camelCasedPropertiesDeep } from '@/lib/utils'
-import { ImapEmailMessage } from '@/types'
+import type { ImapEmailMessage } from '@/types'
 import { invoke } from '@tauri-apps/api/core'
-import { SnakeCasedPropertiesDeep } from 'type-fest'
+import type { SnakeCasedPropertiesDeep } from 'type-fest'
 
 export type ImapEmailAddress = {
   name: string
@@ -89,7 +89,7 @@ export default class ImapClient {
   async fetchMessages(
     mailbox: string,
     startIndex?: number,
-    count?: number
+    count?: number,
   ): Promise<{
     index: number
     total: number

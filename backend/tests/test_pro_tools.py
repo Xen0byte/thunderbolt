@@ -1,6 +1,6 @@
 """Test pro tools functionality."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,15 +19,37 @@ class TestProToolsEndpoints:
 
     def test_search_endpoint_exists(self, client: TestClient) -> None:
         """Test that the search endpoint exists and returns proper error for invalid request."""
-        response = client.post("/pro/search-duckduckgo", json={})
+        response = client.post("/pro/search", json={})
         # Should get validation error for missing query field
         assert response.status_code == 422
 
-    def test_search_exa_endpoint_exists(self, client: TestClient) -> None:
-        """Test that the search-exa endpoint exists and returns proper error for invalid request."""
-        response = client.post("/pro/search-exa", json={})
-        # Should get validation error for missing query field
-        assert response.status_code == 422
+    @patch("pro.routes.search_exa")
+    @patch("pro.routes.exa_client")
+    def test_search_endpoint_success(
+        self, mock_exa_client: Mock, mock_search: AsyncMock, client: TestClient
+    ) -> None:
+        """Test successful search endpoint response."""
+        # Mock the Exa client to exist
+        mock_exa_client.return_value = Mock()
+        # Mock the search_exa function
+        mock_search.return_value = [
+            {
+                "title": "Test Result",
+                "url": "https://example.com",
+                "snippet": "Test snippet",
+                "position": 1,
+            }
+        ]
+
+        response = client.post(
+            "/pro/search", json={"query": "test query", "max_results": 5}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "results" in data
+        assert "Test Result" in data["results"]
 
     def test_fetch_content_endpoint_exists(self, client: TestClient) -> None:
         """Test that the fetch-content endpoint exists and returns proper error for invalid request."""
@@ -53,38 +75,15 @@ class TestProToolsEndpoints:
         # Should get validation error for missing query field
         assert response.status_code == 422
 
-    @patch("pro.duckduckgo.DuckDuckGoSearcher.search")
-    def test_search_endpoint_success(
-        self, mock_search: AsyncMock, client: TestClient
-    ) -> None:
-        """Test successful search endpoint response."""
-        mock_search.return_value = [
-            {
-                "title": "Test Result",
-                "url": "https://example.com",
-                "description": "Test",
-            }
-        ]
-
-        with patch(
-            "pro.duckduckgo.DuckDuckGoSearcher.format_results_for_llm"
-        ) as mock_format:
-            mock_format.return_value = "Formatted results"
-
-            response = client.post(
-                "/pro/search-duckduckgo", json={"query": "test query", "max_results": 5}
-            )
-
-            assert response.status_code == 200
-            data = response.json()
-            assert data["success"] is True
-            assert "results" in data
-
-    @patch("pro.web_content_fetcher.WebContentFetcher.fetch_and_parse")
+    @patch("pro.routes.fetch_content_exa")
+    @patch("pro.routes.exa_client")
     def test_fetch_content_endpoint_success(
-        self, mock_fetch: AsyncMock, client: TestClient
+        self, mock_exa_client: Mock, mock_fetch: AsyncMock, client: TestClient
     ) -> None:
-        """Test successful fetch-content endpoint response."""
+        """Test successful fetch-content endpoint response using Exa proxy."""
+        # Mock the Exa client to exist
+        mock_exa_client.return_value = Mock()
+        # Mock the fetch_content_exa function
         mock_fetch.return_value = "Fetched content"
 
         response = client.post(
@@ -95,6 +94,7 @@ class TestProToolsEndpoints:
         data = response.json()
         assert data["success"] is True
         assert "content" in data
+        assert data["content"] == "Fetched content"
 
     @patch("pro.openmeteo.OpenMeteoWeather.get_current_weather")
     def test_weather_current_endpoint_success(

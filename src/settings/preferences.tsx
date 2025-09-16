@@ -1,12 +1,14 @@
 import { settingsTable } from '@/db/tables'
 import { useDebounce } from '@/hooks/use-debounce'
-import { cn } from '@/lib/utils'
+import { cn, snakeCased } from '@/lib/utils'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { eq } from 'drizzle-orm'
 import ky from 'ky'
 import { ChevronsUpDown } from 'lucide-react'
-import React from 'react'
+import { useEffect, useReducer, useRef } from 'react'
 
+import { TelemetryRequiredModal, type TelemetryRequiredModalRef } from '@/components/telemetry-required-modal'
+import { TelemetryWarningModal, type TelemetryWarningModalRef } from '@/components/telemetry-warning-modal'
 import { ThemeToggle } from '@/components/theme-toggle'
 import {
   AlertDialog,
@@ -26,9 +28,13 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { SectionCard } from '@/components/ui/section-card'
 
-import { useDatabase } from '@/hooks/use-database'
+import { Switch } from '@/components/ui/switch'
+import { DatabaseSingleton } from '@/db/singleton'
+import { trackEvent, type EventType } from '@/lib/analytics'
+import { getPreferencesSettings, updateBooleanSetting } from '@/lib/dal'
 import { resetAppDir } from '@/lib/fs'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { usePostHog } from 'posthog-js/react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -41,8 +47,63 @@ interface LocationData {
   }
 }
 
+type PreferencesState = {
+  open: boolean
+  searchQuery: string
+  locations: LocationData[]
+  isSearching: boolean
+  isResetting: boolean
+}
+
+type PreferencesAction =
+  | { type: 'SET_OPEN'; payload: boolean }
+  | { type: 'SET_SEARCH_QUERY'; payload: string }
+  | { type: 'SET_LOCATIONS'; payload: LocationData[] }
+  | { type: 'SET_IS_SEARCHING'; payload: boolean }
+  | { type: 'SET_IS_RESETTING'; payload: boolean }
+  | { type: 'CLEAR_LOCATION_SEARCH' }
+  | { type: 'RESET_STATE' }
+
+const initialState: PreferencesState = {
+  open: false,
+  searchQuery: '',
+  locations: [],
+  isSearching: false,
+  isResetting: false,
+}
+
+const preferencesReducer = (state: PreferencesState, action: PreferencesAction): PreferencesState => {
+  switch (action.type) {
+    case 'SET_OPEN':
+      return { ...state, open: action.payload }
+    case 'SET_SEARCH_QUERY':
+      return { ...state, searchQuery: action.payload }
+    case 'SET_LOCATIONS':
+      return { ...state, locations: action.payload }
+    case 'SET_IS_SEARCHING':
+      return { ...state, isSearching: action.payload }
+    case 'SET_IS_RESETTING':
+      return { ...state, isResetting: action.payload }
+    case 'CLEAR_LOCATION_SEARCH':
+      return { ...state, searchQuery: '', locations: [] }
+    case 'RESET_STATE':
+      return initialState
+    default:
+      return state
+  }
+}
+
 const nameFormSchema = z.object({
   preferredName: z.string().optional(),
+})
+
+const privacyFormSchema = z.object({
+  dataCollection: z.boolean(),
+})
+
+const previewFeaturesFormSchema = z.object({
+  experimentalFeatureAutomations: z.boolean(),
+  experimentalFeatureTasks: z.boolean(),
 })
 
 const locationFormSchema = z.object({
@@ -52,36 +113,57 @@ const locationFormSchema = z.object({
 })
 
 export default function PreferencesSettingsPage() {
-  const { db } = useDatabase()
+  const db = DatabaseSingleton.instance.db
   const queryClient = useQueryClient()
-  const [open, setOpen] = React.useState(false)
-  const [searchQuery, setSearchQuery] = React.useState('')
-  const [locations, setLocations] = React.useState<LocationData[]>([])
-  const [isSearching, setIsSearching] = React.useState(false)
-  const [isResetting, setIsResetting] = React.useState(false)
+
+  const [state, dispatch] = useReducer(preferencesReducer, initialState)
+  const { open, searchQuery, locations, isSearching, isResetting } = state
+
+  const telemetryRequiredModalRef = useRef<TelemetryRequiredModalRef>(null)
+  const telemetryWarningModalRef = useRef<TelemetryWarningModalRef>(null)
+
+  const handleEnableTelemetry = async (featureName?: string | null) => {
+    await saveDataCollectionMutation.mutateAsync({ dataCollection: true })
+    if (featureName) {
+      await savePreviewFeaturesMutation.mutateAsync({
+        ...previewFeaturesForm.getValues(),
+        [featureName]: true,
+      })
+    }
+  }
+
+  const handleDisableTelemetry = async () => {
+    await saveDataCollectionMutation.mutateAsync({ dataCollection: false })
+    await disableAllPreviewFeatures()
+  }
+
+  const postHog = usePostHog()
 
   // Get any existing settings from the database
   const { data: settings } = useQuery({
     queryKey: ['settings'],
-    queryFn: async () => {
-      const nameData = await db.select().from(settingsTable).where(eq(settingsTable.key, 'location_name'))
-      const latData = await db.select().from(settingsTable).where(eq(settingsTable.key, 'location_lat'))
-      const lngData = await db.select().from(settingsTable).where(eq(settingsTable.key, 'location_lng'))
-      const preferredNameData = await db.select().from(settingsTable).where(eq(settingsTable.key, 'preferred_name'))
-
-      return {
-        locationName: nameData[0]?.value || '',
-        locationLat: latData[0]?.value || '',
-        locationLng: lngData[0]?.value || '',
-        preferredName: preferredNameData[0]?.value || '',
-      }
-    },
+    queryFn: getPreferencesSettings,
   })
 
   const nameForm = useForm<z.infer<typeof nameFormSchema>>({
     resolver: zodResolver(nameFormSchema),
     defaultValues: {
       preferredName: '',
+    },
+  })
+
+  const privacyForm = useForm<z.infer<typeof privacyFormSchema>>({
+    resolver: zodResolver(privacyFormSchema),
+    defaultValues: {
+      dataCollection: true,
+    },
+  })
+
+  const previewFeaturesForm = useForm<z.infer<typeof previewFeaturesFormSchema>>({
+    resolver: zodResolver(previewFeaturesFormSchema),
+    defaultValues: {
+      experimentalFeatureAutomations: false,
+      experimentalFeatureTasks: false,
     },
   })
 
@@ -95,10 +177,19 @@ export default function PreferencesSettingsPage() {
   })
 
   // Update forms when data is loaded
-  React.useEffect(() => {
+  useEffect(() => {
     if (settings) {
       nameForm.reset({
         preferredName: settings.preferredName as string,
+      })
+
+      privacyForm.reset({
+        dataCollection: settings.dataCollection,
+      })
+
+      previewFeaturesForm.reset({
+        experimentalFeatureAutomations: settings.experimentalFeatureAutomations,
+        experimentalFeatureTasks: settings.experimentalFeatureTasks,
       })
 
       locationForm.reset({
@@ -109,21 +200,29 @@ export default function PreferencesSettingsPage() {
           typeof settings.locationLng === 'string' ? settings.locationLng : String(settings.locationLng || ''),
       })
     }
-  }, [settings, nameForm, locationForm])
+  }, [settings, nameForm, locationForm, privacyForm, previewFeaturesForm])
+
+  // Sync preview features when telemetry is disabled
+  useEffect(() => {
+    if (!settings?.dataCollection) {
+      previewFeaturesForm.setValue('experimentalFeatureAutomations', false)
+      previewFeaturesForm.setValue('experimentalFeatureTasks', false)
+    }
+  }, [settings?.dataCollection, previewFeaturesForm])
 
   // Debounce the search query
   const debouncedSearchQuery = useDebounce(searchQuery, 300)
 
   // Search for locations when debounced query changes
-  React.useEffect(() => {
+  useEffect(() => {
     const searchLocations = async () => {
       // Early return if search query is too short
       if (debouncedSearchQuery.trim().length <= 1) {
-        setLocations([])
+        dispatch({ type: 'SET_LOCATIONS', payload: [] })
         return
       }
 
-      setIsSearching(true)
+      dispatch({ type: 'SET_IS_SEARCHING', payload: true })
       try {
         // Get cloud_url from database settings
         const cloudUrlData = await db.select().from(settingsTable).where(eq(settingsTable.key, 'cloud_url'))
@@ -131,7 +230,7 @@ export default function PreferencesSettingsPage() {
 
         if (!cloudUrl) {
           console.error('Cloud URL not configured')
-          setLocations([])
+          dispatch({ type: 'SET_LOCATIONS', payload: [] })
           return
         }
 
@@ -157,12 +256,12 @@ export default function PreferencesSettingsPage() {
             lng: location.lon,
           },
         }))
-        setLocations(transformedLocations)
+        dispatch({ type: 'SET_LOCATIONS', payload: transformedLocations })
       } catch (error) {
         console.error('Error searching locations:', error)
-        setLocations([])
+        dispatch({ type: 'SET_LOCATIONS', payload: [] })
       } finally {
-        setIsSearching(false)
+        dispatch({ type: 'SET_IS_SEARCHING', payload: false })
       }
     }
 
@@ -181,10 +280,62 @@ export default function PreferencesSettingsPage() {
           set: { value: values.preferredName },
         })
     },
+    onSuccess: (_, values) => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+
+      if (values.preferredName?.trim()) {
+        if (settings?.preferredName) {
+          trackEvent('settings_name_update')
+        } else {
+          trackEvent('settings_name_set')
+        }
+      } else {
+        trackEvent('settings_name_clear')
+      }
+    },
+  })
+
+  // Save data collection mutation
+  const saveDataCollectionMutation = useMutation({
+    mutationFn: async (values: z.infer<typeof privacyFormSchema>) => {
+      // Upsert the setting
+      await updateBooleanSetting('data_collection', values.dataCollection)
+    },
+    onSuccess: (_, values) => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+
+      if (values.dataCollection) {
+        postHog.opt_in_capturing()
+        trackEvent('settings_data_collection_enabled')
+      } else {
+        trackEvent('settings_data_collection_disabled')
+        postHog.opt_out_capturing()
+      }
+    },
+  })
+
+  // Save preview features mutation
+  const savePreviewFeaturesMutation = useMutation({
+    mutationFn: async (values: z.infer<typeof previewFeaturesFormSchema>) => {
+      // Save each feature setting
+      await updateBooleanSetting('experimental_feature_automations', values.experimentalFeatureAutomations)
+      await updateBooleanSetting('experimental_feature_tasks', values.experimentalFeatureTasks)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
   })
+
+  // Disable all preview features (when telemetry is turned off)
+  const disableAllPreviewFeatures = async () => {
+    await savePreviewFeaturesMutation.mutateAsync({
+      experimentalFeatureAutomations: false,
+      experimentalFeatureTasks: false,
+    })
+
+    trackEvent('settings_experimental_feature_automations_disabled')
+    trackEvent('settings_experimental_feature_tasks_disabled')
+  }
 
   // Save location mutation
   const saveLocationMutation = useMutation({
@@ -219,14 +370,62 @@ export default function PreferencesSettingsPage() {
         throw error
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, values) => {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
+
+      if (settings?.locationName) {
+        trackEvent('settings_location_update', {
+          location_name: values.locationName,
+        })
+      } else {
+        trackEvent('settings_location_set', {
+          location_name: values.locationName,
+        })
+      }
     },
   })
 
   const handleNameBlur = async (value: string) => {
     // Save the value directly
     await saveNameMutation.mutateAsync({ preferredName: value })
+  }
+
+  const handleDataCollectionToggle = async (value: boolean) => {
+    // If turning off telemetry and preview features are enabled, show warning first
+    if (!value) {
+      const currentValues = previewFeaturesForm.getValues()
+      const hasEnabledFeatures = Object.values(currentValues).some((val) => val === true)
+      if (hasEnabledFeatures) {
+        telemetryWarningModalRef.current?.open()
+        return
+      }
+    }
+
+    await saveDataCollectionMutation.mutateAsync({ dataCollection: value })
+
+    // If telemetry is disabled, also disable experimental features
+    if (!value) {
+      await disableAllPreviewFeatures()
+    }
+  }
+
+  const handleExperimentalFeaturesToggle = async (
+    featureName: keyof z.infer<typeof previewFeaturesFormSchema>,
+    value: boolean,
+  ) => {
+    if (value && !settings?.dataCollection) {
+      telemetryRequiredModalRef.current?.open(featureName)
+      return
+    }
+
+    const currentValues = previewFeaturesForm.getValues()
+    await savePreviewFeaturesMutation.mutateAsync({
+      ...currentValues,
+      [featureName]: value,
+    })
+
+    const eventName = `settings_${snakeCased(featureName)}_${value ? 'enabled' : 'disabled'}`
+    trackEvent(eventName as EventType)
   }
 
   const handleLocationSave = async (location: LocationData) => {
@@ -256,25 +455,27 @@ export default function PreferencesSettingsPage() {
     locationForm.setValue('locationName', location.name)
     locationForm.setValue('locationLat', String(location.coordinates.lat))
     locationForm.setValue('locationLng', String(location.coordinates.lng))
-    setOpen(false)
+    dispatch({ type: 'SET_OPEN', payload: false })
+
     // Save immediately after selection, passing the location data directly
     handleLocationSave(location)
   }
 
   const handleResetDatabase = async () => {
-    setIsResetting(true)
+    dispatch({ type: 'SET_IS_RESETTING', payload: true })
     try {
       await resetAppDir()
+      trackEvent('settings_database_reset')
       // Refresh the page to reinitialize the app
       window.location.reload()
     } catch (error) {
       console.error('Failed to reset database:', error)
-      setIsResetting(false)
+      dispatch({ type: 'SET_IS_RESETTING', payload: false })
     }
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4 w-full max-w-[760px] mx-auto">
+    <div className="flex flex-col gap-6 p-4 pb-12 w-full max-w-[760px] mx-auto">
       <h1 className="mt-8 text-4xl font-bold tracking-tight mb-2 text-primary">Preferences</h1>
 
       <SectionCard title="Appearance">
@@ -329,11 +530,10 @@ export default function PreferencesSettingsPage() {
                   <Popover
                     open={open}
                     onOpenChange={(newOpen) => {
-                      setOpen(newOpen)
+                      dispatch({ type: 'SET_OPEN', payload: newOpen })
                       if (!newOpen) {
                         // Clear search when closing
-                        setSearchQuery('')
-                        setLocations([])
+                        dispatch({ type: 'CLEAR_LOCATION_SEARCH' })
                       }
                     }}
                   >
@@ -360,7 +560,7 @@ export default function PreferencesSettingsPage() {
                         <CommandInput
                           placeholder="Search for locations..."
                           value={searchQuery}
-                          onValueChange={setSearchQuery}
+                          onValueChange={(value) => dispatch({ type: 'SET_SEARCH_QUERY', payload: value })}
                         />
                         <CommandList>
                           {searchQuery.trim().length > 0 && isSearching && (
@@ -403,6 +603,89 @@ export default function PreferencesSettingsPage() {
 
       <div className="h-6" />
 
+      <SectionCard title="Preview Features">
+        <p className="mb-4 text-sm text-muted-foreground">Try out experimental beta features.</p>
+
+        <Form {...previewFeaturesForm}>
+          <form className="flex flex-col gap-4" onSubmit={(e) => e.preventDefault()}>
+            {postHog.isFeatureEnabled('automations') && (
+              <FormField
+                control={previewFeaturesForm.control}
+                name="experimentalFeatureAutomations"
+                render={({ field }) => (
+                  <div className="flex-row flex items-center gap-4">
+                    <div className="flex-1">
+                      <label className="text-sm font-medium">Automations</label>
+                    </div>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={async (value) =>
+                        await handleExperimentalFeaturesToggle('experimentalFeatureAutomations', value)
+                      }
+                    />
+                  </div>
+                )}
+              />
+            )}
+
+            {postHog.isFeatureEnabled('tasks') && (
+              <FormField
+                control={previewFeaturesForm.control}
+                name="experimentalFeatureTasks"
+                render={({ field }) => (
+                  <div className="flex-row flex items-center gap-4">
+                    <div className="flex-1">
+                      <label className="text-sm font-medium">Tasks</label>
+                    </div>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={async (value) =>
+                        await handleExperimentalFeaturesToggle('experimentalFeatureTasks', value)
+                      }
+                    />
+                  </div>
+                )}
+              />
+            )}
+          </form>
+        </Form>
+      </SectionCard>
+
+      <div className="h-6" />
+
+      <SectionCard title="Privacy">
+        <Form {...privacyForm}>
+          <form className="flex flex-col gap-2" onSubmit={(e) => e.preventDefault()}>
+            <FormField
+              control={privacyForm.control}
+              name="dataCollection"
+              render={({ field }) => (
+                <div className="flex-row flex items-center gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Data Collection</label>
+                    <p className="text-sm text-muted-foreground">
+                      Help us improve the app by sending anonymous usage info such as crashes, performance, and usage.
+                      No personal data is collected or stored. Read more about our{' '}
+                      <a
+                        className="text-primary underline-offset-4 hover:underline"
+                        href="https://www.thunderbird.net/en-US/privacy/"
+                        target="_blank"
+                      >
+                        privacy policy
+                      </a>
+                      .
+                    </p>
+                  </div>
+                  <Switch checked={field.value} onCheckedChange={handleDataCollectionToggle} />
+                </div>
+              )}
+            />
+          </form>
+        </Form>
+      </SectionCard>
+
+      <div className="h-6" />
+
       <SectionCard title="Local Database">
         <div className="flex flex-col gap-2">
           <p className="text-sm text-muted-foreground">Delete all of your local data.</p>
@@ -433,6 +716,10 @@ export default function PreferencesSettingsPage() {
           </AlertDialog>
         </div>
       </SectionCard>
+
+      <TelemetryRequiredModal ref={telemetryRequiredModalRef} onEnableTelemetry={handleEnableTelemetry} />
+
+      <TelemetryWarningModal ref={telemetryWarningModalRef} onDisableTelemetry={handleDisableTelemetry} />
     </div>
   )
 }

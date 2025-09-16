@@ -1,5 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority'
-import * as React from 'react'
+import { forwardRef, type InputHTMLAttributes } from 'react'
 
 import { cn } from '@/lib/utils'
 
@@ -9,7 +9,8 @@ const inputVariants = cva(
     variants: {
       variant: {
         default: 'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
-        filled: 'bg-muted/50 focus-visible:bg-transparent focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+        filled:
+          'bg-muted/50 focus-visible:bg-transparent focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
         outline: 'border-2 focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[2px]',
         ghost: 'border-none focus-visible:bg-accent/50 focus-visible:ring-0',
       },
@@ -30,13 +31,27 @@ const inputVariants = cva(
       inputSize: 'default',
       state: 'default',
     },
-  }
+  },
 )
 
-interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'>, VariantProps<typeof inputVariants> {}
+export interface InputProps
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'>,
+    VariantProps<typeof inputVariants> {}
 
-function Input({ className, type, variant, inputSize, state, ...props }: InputProps) {
-  return <input type={type} data-slot="input" className={cn(inputVariants({ variant, inputSize, state, className }))} {...props} />
-}
+const Input = forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, variant, inputSize, state, ...props }, ref) => {
+    return (
+      <input
+        aria-invalid={state === 'error' ? 'true' : undefined}
+        type={type}
+        data-slot="input"
+        className={cn(inputVariants({ variant, inputSize, state, className }))}
+        ref={ref}
+        {...props}
+      />
+    )
+  },
+)
+Input.displayName = 'Input'
 
 export { Input, inputVariants }

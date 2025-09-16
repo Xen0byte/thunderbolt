@@ -1,13 +1,14 @@
 import { settingsTable } from '@/db/tables'
-import { useDatabase } from '@/hooks/use-database'
+import { DatabaseSingleton } from '@/db/singleton'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { eq } from 'drizzle-orm'
-import React, { createContext, useContext, useEffect, useState } from 'react'
+
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { getThemeSetting } from '@/lib/dal'
 
 type Theme = 'dark' | 'light' | 'system'
 
 type ThemeProviderProps = {
-  children: React.ReactNode
+  children: ReactNode
   defaultTheme?: Theme
   storageKey?: string
 }
@@ -24,22 +25,24 @@ const initialState: ThemeProviderState = {
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
 
-export function ThemeProvider({ children, defaultTheme = 'system', storageKey = 'ui-theme', ...props }: ThemeProviderProps) {
-  const { db } = useDatabase()
+export function ThemeProvider({
+  children,
+  defaultTheme = 'system',
+  storageKey = 'ui-theme',
+  ...props
+}: ThemeProviderProps) {
+  const db = DatabaseSingleton.instance.db
   const queryClient = useQueryClient()
   const [theme, setTheme] = useState<Theme>(defaultTheme)
 
   const { data: savedTheme } = useQuery({
-    queryKey: ['theme'],
-    queryFn: async () => {
-      const result = await db.select().from(settingsTable).where(eq(settingsTable.key, storageKey))
-      return (result[0]?.value as Theme) || defaultTheme
-    },
+    queryKey: ['settings', storageKey],
+    queryFn: () => getThemeSetting(storageKey, defaultTheme),
   })
 
   useEffect(() => {
     if (savedTheme) {
-      setTheme(savedTheme)
+      setTheme(savedTheme as Theme)
     }
   }, [savedTheme])
 
@@ -54,7 +57,7 @@ export function ThemeProvider({ children, defaultTheme = 'system', storageKey = 
         })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['theme-setting'] })
+      queryClient.invalidateQueries({ queryKey: ['settings', storageKey] })
     },
   })
 

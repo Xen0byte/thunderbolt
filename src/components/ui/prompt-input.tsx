@@ -1,9 +1,9 @@
 import { AutosizeTextarea } from '@/components/ui/autosize-textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Model } from '@/types'
+import type { Model } from '@/types'
 import { ArrowUp, Lock, Square } from 'lucide-react'
-import { forwardRef } from 'react'
+import { forwardRef, type ReactNode, type ChangeEvent, type KeyboardEvent } from 'react'
 
 interface PromptInputProps {
   value: string
@@ -21,6 +21,7 @@ interface PromptInputProps {
   noForm?: boolean
   isStreaming?: boolean
   onStop?: () => void
+  footerStartElements?: ReactNode
 }
 
 /**
@@ -45,6 +46,7 @@ export const PromptInput = forwardRef<HTMLFormElement, PromptInputProps>(
       noForm = false,
       isStreaming = false,
       onStop,
+      footerStartElements,
     },
     ref,
   ) => {
@@ -56,9 +58,9 @@ export const PromptInput = forwardRef<HTMLFormElement, PromptInputProps>(
       }
     }
 
-    const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)
+    const handleTextareaChange = (e: ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (!isStreaming && submitOnEnter && e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
         onSubmit?.()
@@ -78,43 +80,47 @@ export const PromptInput = forwardRef<HTMLFormElement, PromptInputProps>(
           className="w-full border-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 resize-none"
         />
 
-        <div className="flex gap-2 justify-end items-center w-full">
-          <Select value={selectedModelId} onValueChange={onModelChange}>
-            <SelectTrigger className="rounded-full" size="sm">
-              <SelectValue placeholder="Select a model" />
-            </SelectTrigger>
-            <SelectContent>
-              {models.map((model) => (
-                <SelectItem key={model.id} value={model.id}>
-                  <div className="flex items-center gap-2">
-                    {model.isConfidential ? <Lock className="size-3.5" /> : null}
-                    <p className="text-left">{model.name}</p>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex gap-2 justify-between items-center w-full">
+          <div className="flex items-center gap-2">{footerStartElements}</div>
 
-          {showSubmitButton &&
-            (isStreaming ? (
-              <Button
-                type="button"
-                variant="default"
-                className="h-6 w-6 rounded-full flex items-center justify-center"
-                onClick={onStop}
-              >
-                <Square className="size-3" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                variant="default"
-                className="h-6 w-6 rounded-full flex items-center justify-center"
-                disabled={isLoading || !value.trim()}
-              >
-                <ArrowUp className="size-4" />
-              </Button>
-            ))}
+          <div className="flex gap-2 items-center">
+            <Select value={selectedModelId} onValueChange={onModelChange}>
+              <SelectTrigger className="rounded-full" size="sm">
+                <SelectValue placeholder="Select a model" />
+              </SelectTrigger>
+              <SelectContent>
+                {models.map((model) => (
+                  <SelectItem key={model.id} value={model.id}>
+                    <div className="flex items-center gap-2">
+                      {model.isConfidential ? <Lock className="size-3.5" /> : null}
+                      <p className="text-left">{model.name}</p>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {showSubmitButton &&
+              (isStreaming ? (
+                <Button
+                  type="button"
+                  variant="default"
+                  className="h-6 w-6 rounded-full flex items-center justify-center"
+                  onClick={onStop}
+                >
+                  <Square className="size-3" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  variant="default"
+                  className="h-6 w-6 rounded-full flex items-center justify-center"
+                  disabled={isLoading || !value.trim()}
+                >
+                  <ArrowUp className="size-4" />
+                </Button>
+              ))}
+          </div>
         </div>
       </>
     )

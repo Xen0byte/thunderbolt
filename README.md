@@ -1,7 +1,5 @@
 # Thunderbolt [[Demo]](https://thunderbolt-h9p7.onrender.com)
 
-**_(Formerly known as Mozilla Assist(ant))_**
-
 [![CI](https://github.com/thunderbird/thunderbolt/actions/workflows/ci.yml/badge.svg)](https://github.com/thunderbird/thunderbolt/actions/workflows/ci.yml)
 
 ![Thunderbolt Main Dashboard](./docs/screenshots/main.png)
@@ -24,15 +22,13 @@
 - Vite - frontend package bundler
 - UUID - for all IDs - using v7 so that we can derive "created at" times from IDs and save disk space
 - Rust: imap, mail-parser, html2text - for syncing and parsing emails
+- Storybook: build, test & document components
 
 ## Rust Setup
 
 ```sh
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Use the Nightly toolchain
-rustup toolchain install nightly
 
 # Install sccache globally
 cargo install sccache
@@ -53,8 +49,8 @@ brew install cmake # Mac only
 ### Quick Setup
 
 ```sh
-# Clone the repository with submodules
-git clone --recurse-submodules https://github.com/thunderbird/thunderbolt.git
+# Clone the repository
+git clone https://github.com/thunderbird/thunderbolt
 cd thunderbolt
 
 # Run the setup command to initialize everything
@@ -71,26 +67,46 @@ The `make setup` command will:
 ### Manual Setup (if needed)
 
 ```sh
-# Initialize submodules
-git submodule update --init --recursive
-
 # Install frontend dependencies
 bun install
 
 # Install backend dependencies
 cd backend && uv sync --frozen && cd ..
+```
 
-# Set up Flower framework (optional)
-cd flower/framework && pip install -e . && cd ../..
+## Code Formatting
+
+Thunderbolt uses automated code formatting to maintain consistent code style across the entire project.
+
+### Automatic Pre-commit Formatting
+
+Staged git files are automatically formatted before commits via lint-staged:
+
+- **Frontend files** (`.ts`, `.tsx`, `.js`, `.jsx`, `.json`, `.css`, `.md`) are formatted with Prettier
+- **Python files** (`.py`) are formatted with Ruff
+- **Rust files** (`.rs`) are formatted with cargo fmt
+
+### Manual Formatting Commands
+
+```sh
+# Format all code (frontend, Python, Rust)
+make format
+
+# Check formatting without modifying files
+make format-check
 ```
 
 ## Run
 
 ```sh
-bun tauri dev
+# Recommended: Run with libsql for development
+bun tauri:libsql
+
+# Alternative: Run with no Cargo features (minimal build)
+bun tauri:dev
 ```
 
-### Enabling optional Rust features (e.g. libsql)
+### Enabling optional Rust features
 
 The Rust backend is built with **Cargo features**. By default **no optional
 features are enabled**, which keeps the binary size small and avoids pulling in
@@ -108,20 +124,30 @@ You can pass features to any `tauri` CLI command by adding a `--` separator —
 everything after it is forwarded to `cargo`:
 
 ```sh
-# Run the app with libsql support enabled
-bun tauri dev -- --features libsql
+# Run with libsql (recommended for development)
+bun run tauri:libsql
+
+# Run with all optional features
+bun tauri dev -- --features all
+
+# Run with specific features
+bun tauri dev -- --features libsql,email
 
 # Build a production bundle with all optional features
 bun tauri build -- --features all
-
-# If you ever need to explicitly remove default features in the future:
-bun tauri dev -- --no-default-features --features libsql,email
 ```
 
 Note: when a feature is not compiled in, its corresponding commands are
 omitted from the binary. The renderer detects that automatically through the
 `capabilities` command we added, so no runtime errors occur — the feature is
 simply unavailable in the UI.
+
+## Run Android
+
+```sh
+# Android builds work with default (empty) features
+bun tauri android dev
+```
 
 ## Run Rust Examples
 
@@ -141,6 +167,18 @@ cargo build --bin mistral --release
 # embed - must be built for release to work!
 cargo build --bin embed --release
 ./target/release/embed
+```
+
+## Run Storybook [[DEMO]](https://thunderbolt-storybook.onrender.com/?path=/docs/components-ui-button--docs)
+
+Check the [official](https://storybook.js.org/) documentation for usage instructions and examples.
+
+```sh
+bun storybook
+# open in your browser http://localhost:6006/
+
+# to build
+bun build-storybook
 ```
 
 ## Analyze Vite Modules
@@ -208,8 +246,6 @@ export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="your-password-here"
 ## Building for Devices
 
 ```sh
-rustup toolchain install nightly
-rustup override set nightly
 rustup target add aarch64-apple-ios-sim # Add your device architecture (replace "aarch64-apple-ios-sim" with the desired device architecture)
 bun run tauri ios dev --force-ip-prompt --host # Be sure to select the IP of your dev computer on the local network
 ```
@@ -220,3 +256,4 @@ bun run tauri ios dev --force-ip-prompt --host # Be sure to select the IP of you
 ## Documentation
 
 - [Release Process](./RELEASE.md) - Instructions for creating and publishing new releases
+- [Telemetry](./TELEMETRY.md) - Information about data collection and privacy policy

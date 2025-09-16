@@ -1,9 +1,10 @@
-import { TrayIcon } from '@tauri-apps/api/tray'
-import { Window } from '@tauri-apps/api/window'
-import { UIMessage, type UIDataTypes, type UITools } from 'ai'
-import { InferSelectModel } from 'drizzle-orm'
+import type { LanguageModelV2Usage } from '@ai-sdk/provider'
+import type { TrayIcon } from '@tauri-apps/api/tray'
+import type { Window } from '@tauri-apps/api/window'
+import type { UIDataTypes, UIMessage, UITools } from 'ai'
+import type { InferSelectModel } from 'drizzle-orm'
 import type { z } from 'zod'
-import {
+import type {
   chatMessagesTable,
   chatThreadsTable,
   contactsTable,
@@ -19,8 +20,8 @@ import {
   tasksTable,
   triggersTable,
 } from './db/tables'
-import ImapClient from './imap/imap'
-import { ImapSyncClient } from './sync'
+import type ImapClient from './imap/imap'
+import type { ImapSyncClient } from './sync'
 
 export type InitData = {
   imap: ImapClient
@@ -68,8 +69,15 @@ export type McpServer = InferSelectModel<typeof mcpServersTable>
 export type Prompt = InferSelectModel<typeof promptsTable>
 export type Trigger = InferSelectModel<typeof triggersTable>
 
+export type AutomationRun = {
+  prompt: Prompt | null
+  wasTriggeredByAutomation: boolean
+  isAutomationDeleted: boolean
+}
+
 export type UIMessageMetadata = {
   modelId?: string
+  usage?: LanguageModelV2Usage
 }
 
 export type EmailMessageWithAddresses = EmailMessage & {

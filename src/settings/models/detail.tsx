@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { eq } from 'drizzle-orm'
-import React from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { useParams } from 'react-router'
 import { z } from 'zod'
@@ -21,13 +21,14 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { modelsTable } from '@/db/tables'
-import { useDatabase } from '@/hooks/use-database'
-import { Model } from '@/types'
+import { DatabaseSingleton } from '@/db/singleton'
+import type { Model } from '@/types'
 import { Trash2 } from 'lucide-react'
+import { getModelById } from '@/lib/dal'
 
 const formSchema = z
   .object({
-    provider: z.enum(['thunderbolt', 'openai', 'custom', 'openrouter', 'flower']),
+    provider: z.enum(['thunderbolt', 'anthropic', 'openai', 'custom', 'openrouter', 'flower']),
     name: z.string().min(1, { message: 'Name is required.' }),
     model: z.string().min(1, { message: 'Model name is required.' }),
     url: z.string().optional(),
@@ -63,16 +64,15 @@ const formSchema = z
 
 export default function ModelDetailPage() {
   const { modelId } = useParams()
-  const [showDeleteDialog, setShowDeleteDialog] = React.useState(false)
-  const { db } = useDatabase()
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const db = DatabaseSingleton.instance.db
   const queryClient = useQueryClient()
-  const [showSaved, setShowSaved] = React.useState(false)
+  const [showSaved, setShowSaved] = useState(false)
 
   const { data: model, isLoading } = useQuery({
     queryKey: ['models', modelId],
-    queryFn: async () => {
-      return await db.select().from(modelsTable).where(eq(modelsTable.id, modelId!)).get()
-    },
+    queryFn: () => getModelById(modelId!),
+    enabled: !!modelId,
   })
 
   const updateModelMutation = useMutation({
@@ -109,7 +109,7 @@ export default function ModelDetailPage() {
   })
 
   // Update form values when model changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (model) {
       form.reset({
         provider: model.provider || 'thunderbolt',

@@ -4,10 +4,16 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { formatDate } from '@/lib/utils'
-import { EmailMessageWithAddresses } from '@/types'
+import type { EmailMessageWithAddresses } from '@/types'
 import { Fragment, useEffect, useState } from 'react'
 
-export function EmailMessageView({ message, isOpen: defaultIsOpen = true }: { message: EmailMessageWithAddresses; isOpen?: boolean }) {
+export function EmailMessageView({
+  message,
+  isOpen: defaultIsOpen = true,
+}: {
+  message: EmailMessageWithAddresses
+  isOpen?: boolean
+}) {
   const [isOpen, setIsOpen] = useState(defaultIsOpen)
 
   useEffect(() => {

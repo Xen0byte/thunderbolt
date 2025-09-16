@@ -7,12 +7,18 @@ import { configs as googleToolConfigs } from '@/integrations/google/tools'
 import { configs as microsoftToolConfigs } from '@/integrations/microsoft/tools'
 import { configs as proToolConfigs } from '@/integrations/thunderbolt-pro/tools'
 import { getProStatus } from '@/integrations/thunderbolt-pro/utils'
-import { exchangeCodeForTokens, getUserInfo, GoogleUserInfo, OAuthTokens, redirectOAuthFlow } from '@/lib/auth'
+import {
+  exchangeCodeForTokens,
+  getUserInfo,
+  type GoogleUserInfo,
+  type OAuthTokens,
+  redirectOAuthFlow,
+} from '@/lib/auth'
 import { getSetting, updateSetting } from '@/lib/dal'
 import { startOAuthFlowWebview } from '@/lib/oauth-webview'
 import { isTauri } from '@/lib/platform'
 import { Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
 type Integration = {
@@ -20,7 +26,7 @@ type Integration = {
   name: string
   provider: string
   connectLabel: string
-  icon: React.ReactNode
+  icon: ReactNode
   isEnabled: boolean
   isConnected: boolean
   userEmail?: string
@@ -310,7 +316,7 @@ export default function IntegrationsPage() {
 
       await loadIntegrations()
     } catch (error) {
-      console.error('Failed to disconnect integration')
+      console.error('Failed to disconnect integration', error)
     }
   }
 
@@ -328,7 +334,7 @@ export default function IntegrationsPage() {
 
       console.log(`${integration.name} integration ${enabled ? 'enabled' : 'disabled'}`)
     } catch (error) {
-      console.error('Failed to update integration')
+      console.error('Failed to update integration', error)
     }
   }
 
@@ -341,7 +347,7 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className="max-w-[760px] mx-auto p-4">
+    <div className="max-w-[760px] mx-auto p-4 pb-12">
       <div className="mb-6">
         <h1 className="mt-8 text-4xl font-bold tracking-tight mb-2 text-primary">Integrations</h1>
       </div>

@@ -1,6 +1,7 @@
 import { SidebarFooter } from '@/components/sidebar-footer'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { NavLink } from '@/components/ui/nav-link'
+import { SearchInput } from '@/components/ui/search-input'
 import {
   Sidebar,
   SidebarContent,
@@ -15,14 +16,14 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { DeleteAllChatsDialog, DeleteAllChatsDialogRef } from '@/components/delete-all-chats-dialog'
+import { DeleteAllChatsDialog, type DeleteAllChatsDialogRef } from '@/components/delete-all-chats-dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { chatThreadsTable } from '@/db/tables'
-import { useDatabase } from '@/hooks/use-database'
+import { DatabaseSingleton } from '@/db/singleton'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { getOrCreateChatThread } from '@/lib/dal'
+import { getAllChatThreads, getOrCreateChatThread } from '@/lib/dal'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { desc, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import {
   ArrowLeft,
   Bot,
@@ -32,20 +33,23 @@ import {
   Lock,
   MoreHorizontal,
   Plug,
+  Search,
   Server,
   Settings,
   SlidersHorizontal,
   SquarePen,
   Zap,
 } from 'lucide-react'
-import { useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
-import { DeleteChatDialog, DeleteChatDialogRef } from '@/components/delete-chat-dialog'
+import { DeleteChatDialog, type DeleteChatDialogRef } from '@/components/delete-chat-dialog'
+import { trackEvent } from '@/lib/analytics'
+import { useBooleanSetting } from '@/hooks/use-setting'
 
 export default function ChatSidebar() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { db } = useDatabase()
+  const db = DatabaseSingleton.instance.db
   const queryClient = useQueryClient()
   const { setOpenMobile } = useSidebar()
   const isMobile = useIsMobile()
@@ -58,21 +62,45 @@ export default function ChatSidebar() {
   // Simple route check: any /settings/* path triggers the settings sidebar variant on mobile
   const isSettingsRoute = location.pathname.startsWith('/settings')
 
-  const { data: chatThreads = [] } = useQuery({
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  const [showSearch, setShowSearch] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  const [isTasksEnabled] = useBooleanSetting('experimental_feature_tasks')
+  const [isAutomationsEnabled] = useBooleanSetting('experimental_feature_automations')
+
+  useEffect(() => {
+    if (showSearch && searchInputRef.current) {
+      // Small delay to ensure the element is visible before focusing
+      setTimeout(() => {
+        searchInputRef.current?.focus()
+      }, 100)
+    }
+  }, [showSearch])
+
+  const { data } = useQuery({
     queryKey: ['chatThreads'],
-    queryFn: async () => {
-      return db.select().from(chatThreadsTable).orderBy(desc(chatThreadsTable.id))
-    },
+    queryFn: getAllChatThreads,
+    placeholderData: (previousData) => previousData,
   })
+
+  const chatThreads = useMemo(() => {
+    if (!data) {
+      return []
+    }
+
+    return data.filter((thread) => thread.title?.toLowerCase().includes(debouncedSearchQuery?.toLowerCase()))
+  }, [data, debouncedSearchQuery])
 
   const deleteChatMutation = useMutation({
     mutationFn: async ({ id }: { id: string }) => {
       await db.delete(chatThreadsTable).where(eq(chatThreadsTable.id, id))
     },
     onSuccess: () => {
+      trackEvent('chat_delete', { chat_id: threadIdRef.current })
       deleteChatDialogRef.current?.close()
-      threadIdRef.current = null
       queryClient.invalidateQueries({ queryKey: ['chatThreads'] })
+      threadIdRef.current = null
     },
   })
 
@@ -84,6 +112,7 @@ export default function ChatSidebar() {
       return chatThreadId
     },
     onSuccess: async (chatThreadId) => {
+      trackEvent('chat_clear_all')
       deleteAllChatsDialogRef.current?.close()
       // Invalidate queries after the new thread is created
       await queryClient.invalidateQueries({ queryKey: ['chatThreads'] })
@@ -93,6 +122,7 @@ export default function ChatSidebar() {
 
   const createNewChat = async (closeAfter: boolean = true) => {
     try {
+      trackEvent('chat_new_clicked')
       const chatThreadId = await getOrCreateChatThread()
       queryClient.invalidateQueries({ queryKey: ['chatThreads'] })
       navigate(`/chats/${chatThreadId}`)
@@ -107,6 +137,10 @@ export default function ChatSidebar() {
 
   const handleChatClick = (threadId: string) => {
     navigate(`/chats/${threadId}`)
+
+    // Track select chat event
+    trackEvent('chat_select', { chat_id: threadId })
+
     if (isMobile) {
       setOpenMobile(false)
     }
@@ -242,22 +276,26 @@ export default function ChatSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <NavLink to="/tasks">
-                    <CheckSquare className="size-4" />
-                    <span>Tasks</span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <NavLink to="/automations">
-                    <Zap className="size-4" />
-                    <span>Automations</span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {isTasksEnabled && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink to="/tasks">
+                      <CheckSquare className="size-4" />
+                      <span>Tasks</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+              {isAutomationsEnabled && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink to="/automations">
+                      <Zap className="size-4" />
+                      <span>Automations</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               <SidebarMenuItem>
                 {isMobile ? (
                   <SidebarMenuButton onClick={showSettingsMenu} className="cursor-pointer">
@@ -282,28 +320,57 @@ export default function ChatSidebar() {
         <SidebarGroup className="flex-1 overflow-y-auto">
           <div className="flex items-center justify-between">
             <SidebarGroupLabel>Recent Chats</SidebarGroupLabel>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <SidebarMenuButton
-                    onClick={() => deleteAllChatsDialogRef.current?.open()}
-                    className="w-fit pr-0 pl-0 aspect-square items-center justify-center cursor-pointer"
-                    disabled={deleteAllChatsMutation.isPending}
-                  >
-                    {deleteAllChatsMutation.isPending ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Flame className="size-4" />
-                    )}
-                  </SidebarMenuButton>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>Clear all chats</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <div className="flex items-center gap-0.5">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      onClick={() => setShowSearch(!showSearch)}
+                      className="w-fit pr-0 pl-0 aspect-square items-center justify-center cursor-pointer"
+                    >
+                      <Search className={`size-4 ${debouncedSearchQuery ? 'text-blue-500' : ''}`} />
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>Search chats</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      onClick={() => deleteAllChatsDialogRef.current?.open()}
+                      className="w-fit pr-0 pl-0 aspect-square items-center justify-center cursor-pointer"
+                      disabled={deleteAllChatsMutation.isPending}
+                    >
+                      {deleteAllChatsMutation.isPending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Flame className="size-4" />
+                      )}
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>Clear all chats</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </div>
-          <SidebarMenu>
+          <div
+            className={`transition-all duration-300 ease-in-out ${
+              showSearch ? 'max-h-12 opacity-100 mt-2' : 'max-h-0 opacity-0 overflow-hidden'
+            }`}
+          >
+            <SearchInput
+              ref={searchInputRef}
+              containerClassName="mb-1"
+              placeholder="Search chats..."
+              debouncedOnChange={setDebouncedSearchQuery}
+            />
+          </div>
+          <SidebarMenu className="flex-1 overflow-y-auto mt-2">
             {chatThreads.map((thread) => (
               <DropdownMenu key={thread.id}>
                 <SidebarMenuItem>
@@ -334,6 +401,11 @@ export default function ChatSidebar() {
                 </SidebarMenuItem>
               </DropdownMenu>
             ))}
+            {chatThreads.length === 0 && debouncedSearchQuery && (
+              <div className="text-center text-sm py-12 px-4 text-muted-foreground">
+                No matches for "{debouncedSearchQuery}"
+              </div>
+            )}
           </SidebarMenu>
         </SidebarGroup>
 

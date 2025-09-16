@@ -102,7 +102,10 @@ pub mod commands {
 
         let connection_arc = pool.get_connection().await;
         let connection = connection_arc.lock().await;
-        let mut stmt = connection.prepare(&query).await.map_err(|e| e.to_string())?;
+        let stmt = connection
+            .prepare(&query)
+            .await
+            .map_err(|e| e.to_string())?;
 
         let rows_affected_usize: usize = if let Some(params) = values {
             let libsql_params: Vec<libsql::Value> = params
@@ -124,7 +127,9 @@ pub mod commands {
                 })
                 .collect();
 
-            stmt.execute(libsql_params).await.map_err(|e| e.to_string())?
+            stmt.execute(libsql_params)
+                .await
+                .map_err(|e| e.to_string())?
         } else {
             stmt.execute(()).await.map_err(|e| e.to_string())?
         };
@@ -147,7 +152,10 @@ pub mod commands {
 
         let connection_arc = pool.get_connection().await;
         let connection = connection_arc.lock().await;
-        let mut stmt = connection.prepare(&query).await.map_err(|e| e.to_string())?;
+        let stmt = connection
+            .prepare(&query)
+            .await
+            .map_err(|e| e.to_string())?;
 
         let rows = if let Some(params) = values {
             let libsql_params: Vec<libsql::Value> = params
@@ -198,7 +206,10 @@ pub mod commands {
 
     // Also expose an optional `close` command to gracefully shut down the pool.
     #[command]
-    pub async fn close(state: State<'_, Mutex<LibsqlState>>, _db: Option<String>) -> Result<bool, String> {
+    pub async fn close(
+        state: State<'_, Mutex<LibsqlState>>,
+        _db: Option<String>,
+    ) -> Result<bool, String> {
         let mut state = state.lock().await;
         state.db_pool = None;
         Ok(true)
@@ -206,7 +217,7 @@ pub mod commands {
 }
 
 // Re-export so the main app can reference them directly as thunderbolt_libsql::init_libsql etc.
-pub use commands::{init_libsql, execute, select};
+pub use commands::{execute, init_libsql, select};
 
 // Also expose an optional `close` command to gracefully shut down the pool.
 pub use commands::close;

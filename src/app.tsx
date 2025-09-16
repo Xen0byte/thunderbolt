@@ -52,8 +52,9 @@ import Loading from './loading'
 import SettingsLayout from './settings/layout'
 import { SideviewProvider } from './sideview/provider'
 import { ImapSyncClient, ImapSyncProvider } from './sync'
-import { InitData, SideviewType } from './types'
+import type { InitData, SideviewType } from './types'
 import UiKitPage from './ui-kit'
+import { useBooleanSetting } from './hooks/use-setting'
 
 const queryClient = new QueryClient()
 
@@ -72,37 +73,40 @@ function AppContent({ initData }: { initData: InitData }) {
 function AppRoutes({ initData }: { initData: InitData }) {
   usePageTracking()
 
+  const [isTasksEnabled] = useBooleanSetting('experimental_feature_tasks')
+  const [isAutomationsEnabled] = useBooleanSetting('experimental_feature_automations')
+
   return (
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          {/* Home routes with HomeLayout */}
-          <Route element={<ChatLayout />}>
-            <Route index element={<Navigate to={`/chats/${initData.initialThreadId}`} replace />} />
-            <Route path="chats/:chatThreadId" element={<ChatDetailPage />} />
-            <Route path="tasks" element={<TasksPage />} />
-            <Route path="automations" element={<AutomationsPage />} />
-            <Route path="message-simulator" element={<MessageSimulatorPage />} />
-          </Route>
-
-          {/* Settings routes with SettingsLayout */}
-          <Route path="settings" element={<SettingsLayout />}>
-            <Route index element={<Settings />} />
-            <Route path="preferences" element={<PreferencesSettingsPage />} />
-            <Route path="models" element={<ModelsPage />} />
-            <Route path="mcp-servers" element={<McpServersPage />} />
-            <Route path="integrations" element={<IntegrationsPage />} />
-            <Route path="accounts" element={<AccountsSettingsPage />} />
-            <Route path="thunderbolt-bridge" element={<ThunderboltBridgeSettingsPage />} />
-            <Route path="dev-settings" element={<DevSettingsPage />} />
-          </Route>
-
-          <Route path="ui-kit" element={<UiKitPage />} />
-          <Route path="devtools" element={<DevToolsPage />} />
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        {/* Home routes with HomeLayout */}
+        <Route element={<ChatLayout />}>
+          <Route index element={<Navigate to={`/chats/${initData.initialThreadId}`} replace />} />
+          <Route path="chats/:chatThreadId" element={<ChatDetailPage />} />
+          {isTasksEnabled && <Route path="tasks" element={<TasksPage />} />}
+          {isAutomationsEnabled && <Route path="automations" element={<AutomationsPage />} />}
+          <Route path="message-simulator" element={<MessageSimulatorPage />} />
         </Route>
 
-        {/* OAuth callback route */}
-        <Route path="/oauth/callback" element={<OAuthCallback />} />
-      </Routes>
+        {/* Settings routes with SettingsLayout */}
+        <Route path="settings" element={<SettingsLayout />}>
+          <Route index element={<Settings />} />
+          <Route path="preferences" element={<PreferencesSettingsPage />} />
+          <Route path="models" element={<ModelsPage />} />
+          <Route path="mcp-servers" element={<McpServersPage />} />
+          <Route path="integrations" element={<IntegrationsPage />} />
+          <Route path="accounts" element={<AccountsSettingsPage />} />
+          <Route path="thunderbolt-bridge" element={<ThunderboltBridgeSettingsPage />} />
+          <Route path="dev-settings" element={<DevSettingsPage />} />
+        </Route>
+
+        <Route path="ui-kit" element={<UiKitPage />} />
+        <Route path="devtools" element={<DevToolsPage />} />
+      </Route>
+
+      {/* OAuth callback route */}
+      <Route path="/oauth/callback" element={<OAuthCallback />} />
+    </Routes>
   )
 }
 

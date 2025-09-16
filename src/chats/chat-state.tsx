@@ -1,9 +1,10 @@
 import { aiFetchStreamingResponse } from '@/ai/fetch'
 import ChatUI from '@/components/chat/chat-ui'
 import { useSetting } from '@/hooks/use-setting'
+import { trackEvent } from '@/lib/analytics'
 import { getDefaultModelForThread, getTriggerPromptForThread } from '@/lib/dal'
 import { useMCP } from '@/lib/mcp-provider'
-import { Model, Prompt, SaveMessagesFunction, type ThunderboltUIMessage } from '@/types'
+import type { Model, SaveMessagesFunction, ThunderboltUIMessage } from '@/types'
 import { useChat } from '@ai-sdk/react'
 import { useQuery } from '@tanstack/react-query'
 import { DefaultChatTransport } from 'ai'
@@ -32,13 +33,14 @@ export default function ChatState({ id, models, initialMessages, saveMessages }:
   }, [selectedModelId])
 
   const { data: selectedModel } = useQuery<Model>({
-    queryKey: ['defaultModel', id],
+    queryKey: ['models', 'defaultModel', id],
     queryFn: () => getDefaultModelForThread(id, defaultModelId ?? undefined),
   })
 
   const handleModelChange = (modelId: string | null) => {
     setSelectedModelId(modelId)
     setDefaultModelId(modelId)
+    trackEvent('model_select', { model: modelId })
   }
 
   useEffect(() => {
@@ -89,6 +91,12 @@ export default function ChatState({ id, models, initialMessages, saveMessages }:
         id,
         messages: [message],
       })
+
+      trackEvent('chat_receive_reply', {
+        model: selectedModelIdRef.current,
+        length: message.parts?.reduce((acc, part) => acc + (part.type === 'text' ? part.text.length : 0), 0) || 0,
+        reply_number: chatMessages.length + 1,
+      })
     },
     onError: (error) => {
       console.error('Chat error:', error)
@@ -99,7 +107,7 @@ export default function ChatState({ id, models, initialMessages, saveMessages }:
   const { messages: chatMessages, status } = chatHelpers
 
   // Load the automation prompt that triggered this chat, if any
-  const { data: triggerPrompt } = useQuery<Prompt | null>({
+  const { data: triggerData } = useQuery({
     queryKey: ['triggerPrompt', id],
     queryFn: () => getTriggerPromptForThread(id),
   })
@@ -136,7 +144,8 @@ export default function ChatState({ id, models, initialMessages, saveMessages }:
       models={models}
       selectedModelId={selectedModelId ?? undefined}
       onModelChange={handleModelChange}
-      triggerPrompt={triggerPrompt ?? undefined}
+      triggerAutomation={triggerData ?? undefined}
+      chatThreadId={id}
     />
   )
 }

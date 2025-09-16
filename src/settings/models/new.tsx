@@ -11,8 +11,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { modelsTable } from '@/db/tables'
-import { useDatabase } from '@/hooks/use-database'
-import { Model } from '@/types'
+import { DatabaseSingleton } from '@/db/singleton'
+import type { Model } from '@/types'
 
 const formSchema = z
   .object({
@@ -52,7 +52,7 @@ const formSchema = z
 
 export default function NewModelPage() {
   const navigate = useNavigate()
-  const { db } = useDatabase()
+  const db = DatabaseSingleton.instance.db
   const queryClient = useQueryClient()
 
   const createModelMutation = useMutation({
@@ -91,6 +91,7 @@ export default function NewModelPage() {
       toolUsage: 1,
       isConfidential: 0,
       startWithReasoning: 0,
+      contextWindow: null,
     })
   }
 

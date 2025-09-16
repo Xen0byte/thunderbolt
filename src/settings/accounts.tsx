@@ -10,13 +10,14 @@ import {
 } from '@/components/ui/responsive-modal'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { accountsTable } from '@/db/tables'
-import { useDatabase } from '@/hooks/use-database'
+import { DatabaseSingleton } from '@/db/singleton'
 import ImapClient from '@/imap/imap'
+import { getAllAccounts } from '@/lib/dal'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { eq } from 'drizzle-orm'
 import { Plus } from 'lucide-react'
-import React from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -30,24 +31,22 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>
 
 export default function AccountsSettingsPage() {
-  const { db } = useDatabase()
+  const db = DatabaseSingleton.instance.db
   const queryClient = useQueryClient()
-  const [showDialog, setShowDialog] = React.useState(false)
-  const [showSaved, setShowSaved] = React.useState(false)
+  const [showDialog, setShowDialog] = useState(false)
+  const [showSaved, setShowSaved] = useState(false)
 
   // Add state for the selected account
-  const [selectedAccount, setSelectedAccount] = React.useState<string | null>(null)
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
 
   // Fetch accounts from the database
   const { data: accounts = [] } = useQuery({
     queryKey: ['accounts'],
-    queryFn: async () => {
-      return await db.select().from(accountsTable)
-    },
+    queryFn: getAllAccounts,
   })
 
   // Select first account by default
-  React.useEffect(() => {
+  useEffect(() => {
     if (accounts.length > 0 && !selectedAccount) {
       setSelectedAccount(accounts[0].id)
     }
@@ -89,7 +88,7 @@ export default function AccountsSettingsPage() {
   })
 
   // Update form when selected account changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (currentAccount) {
       form.reset({
         hostname: currentAccount.imapHostname || '',

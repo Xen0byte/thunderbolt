@@ -5,10 +5,11 @@ import { getCloudUrl } from '@/lib/config'
 import { getBooleanSetting, getSetting } from '@/lib/dal'
 import { fetch } from '@/lib/fetch'
 import { createToolset, getAvailableTools } from '@/lib/tools'
-import { Model, SaveMessagesFunction, type ThunderboltUIMessage } from '@/types'
+import type { Model, SaveMessagesFunction, ThunderboltUIMessage } from '@/types'
+import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { LanguageModelV2 } from '@ai-sdk/provider'
+import type { LanguageModelV2 } from '@ai-sdk/provider'
 
 // Currently @openrouter/ai-sdk-provider is NOT compatible with Vercel AI SDK v5. If you enable this, you will get the following error:
 // > [Error] Chat error: – Error: Unhandled chunk type: text-start — run-tools-transformation.ts:275
@@ -18,7 +19,7 @@ import { LanguageModelV2 } from '@ai-sdk/provider'
 import { createFlowerProvider } from '@/flower'
 import {
   convertToModelMessages,
-  experimental_createMCPClient,
+  type experimental_createMCPClient,
   stepCountIs,
   streamText,
   wrapLanguageModel,
@@ -71,6 +72,16 @@ export const createModel = async (modelConfig: Model): Promise<LanguageModelV2> 
         fetch,
       })
       return openaiCompatible(modelConfig.model)
+    }
+    case 'anthropic': {
+      const anthropic = createAnthropic({
+        apiKey: modelConfig.apiKey || '',
+        fetch,
+        headers: {
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+      })
+      return anthropic(modelConfig.model)
     }
     case 'openai': {
       if (!modelConfig.apiKey) throw new Error('No API key provided')
@@ -174,13 +185,36 @@ export const aiFetchStreamingResponse = async ({
       middleware,
     })
 
+    const MAX_STEPS = 20
+
     const result = streamText({
       temperature: 0.25,
       model: wrappedModel,
       system: systemPrompt,
       messages: convertToModelMessages(messages),
       tools: supportsTools ? toolset : undefined,
-      stopWhen: stepCountIs(20),
+      stopWhen: stepCountIs(MAX_STEPS),
+
+      // Guarantee the last allowed step cannot call tools
+      // Note: This currently does NOT work for Flower - likely because of the Hermes middleware. (@todo)
+      prepareStep: ({ steps, stepNumber, messages }) => {
+        if (steps.length >= MAX_STEPS - 1) {
+          console.log(`Final step ${stepNumber} - telling model to wrap it up...`)
+          return {
+            activeTools: [],
+            messages: [
+              ...messages,
+              {
+                // You might think that "system" would make more sense, but it many providers ignore system messages in the middle of the conversation.
+                role: 'user',
+                content:
+                  'This is the LAST STEP. You MUST reply with a final message NOW. If you have enough information to provide me with a high quality response using prior tool results, respond with your final answer. If you do not have enough information, ask if I would like you to continue.',
+              },
+            ],
+          }
+        }
+      },
+
       abortSignal,
       // providerOptions: {
       //   custom: {
@@ -203,13 +237,14 @@ export const aiFetchStreamingResponse = async ({
           console.groupEnd()
         })
       },
-      onFinish: (finish) => {
+      onFinish: async (finish) => {
         if (process.env.NODE_ENV === 'test') return
 
         console.log('finish', {
           text: finish.text,
           finishReason: finish.finishReason,
           toolCallCount: finish.toolCalls?.length || 0,
+          usage: finish.totalUsage,
         })
       },
       onError: (error) => {
@@ -222,8 +257,25 @@ export const aiFetchStreamingResponse = async ({
 
     return result.toUIMessageStreamResponse<ThunderboltUIMessage>({
       sendReasoning: true,
-      // Attach the modelId as metadata so the client knows which model was used
-      messageMetadata: () => ({ modelId }),
+      messageMetadata: ({ part }) => {
+        switch (part.type) {
+          case 'finish-step':
+            return {
+              modelId,
+              usage: part.usage,
+            }
+          case 'finish':
+            return {
+              modelId,
+              // If you wanted to get the total usage for the entire conversation, you could do this:
+              // usage: part.totalUsage,
+            }
+          default:
+            return {
+              modelId,
+            }
+        }
+      },
     })
   } catch (error) {
     console.error('aiFetchStreamingResponse error', error)

@@ -18,6 +18,8 @@ help:
 	@echo "  make build-android  - Build Tauri Android app"
 	@echo "  make build-ios      - Build Tauri iOS app"
 	@echo "  make clean          - Clean build artifacts"
+	@echo "  make format         - Format frontend (JS/TS), Python, and Rust code"
+	@echo "  make format-check   - Check formatting for frontend, Python, and Rust code"
 
 # Setup project - initialize submodules and install all dependencies
 setup:
@@ -27,15 +29,6 @@ setup:
 	bun install
 	@echo "$(BLUE)→ Installing backend dependencies...$(NC)"
 	cd backend && uv sync --frozen
-	@echo "$(BLUE)→ Setting up Flower framework (optional)...$(NC)"
-	@if [ -d flower/framework ]; then \
-		echo "$(YELLOW)  Found Flower framework. Setting up environment...$(NC)"; \
-		cd flower && ./dev/setup-envs.sh || true; \
-		echo "$(YELLOW)  Note: Flower framework setup is optional. Install it manually if needed:$(NC)"; \
-		echo "$(YELLOW)  cd flower/framework && pip install -e .$(NC)"; \
-	else \
-		echo "$(YELLOW)  Flower framework not found. Skipping...$(NC)"; \
-	fi
 	@echo "$(GREEN)✓ Setup complete!$(NC)"
 
 # Install dependencies
@@ -73,7 +66,7 @@ build-ios:
 
 # Clean build artifacts
 clean:
-	- rm -rf dist src-tauri/target node_modules flower/intelligence/ts/node_modules flower/intelligence/ts/dist public/flower
+	- rm -rf dist src-tauri/target node_modules
 	- (cd src-tauri && cargo clean)
 
 # Linting
@@ -85,10 +78,24 @@ lint-fix:
 
 # Formatting
 format:
+	@echo "$(BLUE)→ Formatting frontend code...$(NC)"
 	bun run format
+	@echo "$(BLUE)→ Formatting Python code...$(NC)"
+	cd backend && make format && cd ..
+	@echo "$(BLUE)→ Formatting Rust code...$(NC)"
+	bun run format:rust
+	@echo "$(GREEN)✓ Formatting complete!$(NC)"
 
 format-check:
+	@echo "$(BLUE)→ Checking frontend formatting...$(NC)"
 	bun run format-check
+	@echo "$(BLUE)→ Checking Python formatting...$(NC)"
+	cd backend && uv run ruff format --check . && cd ..
+	@echo "$(BLUE)→ Checking Python import sorting...$(NC)"
+	cd backend && uv run ruff check . && cd ..
+	@echo "$(BLUE)→ Checking Rust formatting...$(NC)"
+	bun run format:rust-check
+	@echo "$(GREEN)✓ Format check complete!$(NC)"
 
 # Type checking
 type-check:

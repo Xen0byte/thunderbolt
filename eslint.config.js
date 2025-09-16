@@ -1,3 +1,6 @@
+// For more info, see https://github.com/storybookjs/eslint-plugin-storybook#configuration-flat-config-format
+import storybook from 'eslint-plugin-storybook'
+
 import js from '@eslint/js'
 import typescript from '@typescript-eslint/eslint-plugin'
 import typescriptParser from '@typescript-eslint/parser'
@@ -43,14 +46,26 @@ export default [
     },
     rules: {
       // TypeScript rules
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // turn off the base rule to avoid duplicate reports
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          args: 'all',
+          argsIgnorePattern: '^_', // fn args like (_evt)
+          varsIgnorePattern: '^_', // variables like const _x = ...
+          caughtErrors: 'all',
+          caughtErrorsIgnorePattern: '^_', // catch ( _err ) { ... }
+          ignoreRestSiblings: true, // const { used, ..._rest } = obj
+        },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-non-null-assertion': 'off',
 
       // React rules
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
-      
+
       // React Hooks rules
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
@@ -58,6 +73,25 @@ export default [
       // General rules
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'prefer-const': 'error',
+      'no-async-promise-executor': 'off',
+      // Prevent importing React as default
+      'no-restricted-imports': [
+        'error',
+        {
+          name: 'react',
+          importNames: ['default'],
+          message: 'Do not import default React. Use named imports instead.',
+        },
+      ],
+      // Enforce type imports to always use the `type` keyword
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        {
+          prefer: 'type-imports',
+          disallowTypeAnnotations: false,
+        },
+      ],
     },
   },
+  ...storybook.configs['flat/recommended'],
 ]
