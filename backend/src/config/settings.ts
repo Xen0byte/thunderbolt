@@ -21,6 +21,11 @@ const settingsSchema = z.object({
   microsoftClientId: z.string().default(''),
   microsoftClientSecret: z.string().default(''),
 
+  // PowerSync Settings
+  powersyncJwtSecret: z.string().default('powersync-dev-secret-change-in-production'),
+  powersyncUrl: z.string().default('http://localhost:8080'),
+  powersyncTokenExpirySeconds: z.coerce.number().default(3600), // 1 hour
+
   // General settings
   logLevel: z.enum(['DEBUG', 'INFO', 'WARN', 'ERROR']).default('INFO'),
   port: z.coerce.number().default(8000),
@@ -62,6 +67,9 @@ const parseSettings = (): Settings => {
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
     microsoftClientId: process.env.MICROSOFT_CLIENT_ID || '',
     microsoftClientSecret: process.env.MICROSOFT_CLIENT_SECRET || '',
+    powersyncJwtSecret: process.env.POWERSYNC_JWT_SECRET || 'powersync-dev-secret-change-in-production',
+    powersyncUrl: process.env.POWERSYNC_URL || 'http://localhost:8080',
+    powersyncTokenExpirySeconds: process.env.POWERSYNC_TOKEN_EXPIRY_SECONDS || '3600',
     logLevel: (process.env.LOG_LEVEL || 'INFO').toUpperCase(),
     port: process.env.PORT || '8000',
     posthogHost: process.env.POSTHOG_HOST || 'https://us.i.posthog.com',

@@ -1,10 +1,11 @@
+import * as settingsModule from '@/config/settings'
 import type { ConsoleSpies } from '@/test-utils/console-spies'
 import { setupConsoleSpy } from '@/test-utils/console-spies'
+import { createMockSettings } from '@/test-utils/mock-settings'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test'
 import { Elysia } from 'elysia'
 import { createLinkPreviewRoutes } from './link-preview'
 import type { LinkPreviewResponse } from './types'
-import * as settingsModule from '@/config/settings'
 
 describe('Link Preview Routes', () => {
   let app: Elysia
@@ -28,29 +29,7 @@ describe('Link Preview Routes', () => {
     consoleSpies = setupConsoleSpy()
 
     // Mock settings
-    getSettingsSpy = spyOn(settingsModule, 'getSettings').mockReturnValue({
-      fireworksApiKey: '',
-      mistralApiKey: '',
-      anthropicApiKey: '',
-      exaApiKey: '',
-      thunderboltInferenceUrl: '',
-      thunderboltInferenceApiKey: '',
-      monitoringToken: '',
-      googleClientId: '',
-      googleClientSecret: '',
-      microsoftClientId: '',
-      microsoftClientSecret: '',
-      logLevel: 'INFO',
-      port: 8000,
-      posthogHost: 'https://us.i.posthog.com',
-      posthogApiKey: '',
-      corsOrigins: 'http://localhost:1420',
-      corsOriginRegex: '',
-      corsAllowCredentials: true,
-      corsAllowMethods: 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
-      corsAllowHeaders: 'Content-Type,Authorization',
-      corsExposeHeaders: '',
-    })
+    getSettingsSpy = spyOn(settingsModule, 'getSettings').mockReturnValue(createMockSettings())
 
     // Create mock fetch
     mockFetch = mock(() => Promise.resolve(createMockHtmlResponse('<html></html>')))
