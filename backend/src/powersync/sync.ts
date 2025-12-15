@@ -19,7 +19,16 @@ export type CrudOperation = {
  *
  * Add new table names here as you enable sync for more frontend tables.
  */
-const ALLOWED_TABLES = ['models'] as const
+const ALLOWED_TABLES = [
+  'settings',
+  'chat_threads',
+  'chat_messages',
+  'tasks',
+  'models',
+  'mcp_servers',
+  'prompts',
+  'triggers',
+] as const
 type AllowedTable = (typeof ALLOWED_TABLES)[number]
 
 const isAllowedTable = (table: string): table is AllowedTable => {
