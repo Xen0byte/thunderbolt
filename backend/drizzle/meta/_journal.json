@@ -19,22 +19,8 @@
     {
       "idx": 2,
       "version": "7",
-      "when": 1765548376767,
-      "tag": "0002_ancient_jigsaw",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1765830488840,
-      "tag": "0003_zippy_puck",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1765892336798,
-      "tag": "0004_cold_colleen_wing",
+      "when": 1765897673402,
+      "tag": "0002_thankful_wild_pack",
       "breakpoints": true
     }
   ]

@@ -99,6 +99,17 @@ export class PowerSyncDatabaseWrapper implements DatabaseInterface {
   }
 
   /**
+   * Disconnect and clear all local data.
+   * Use this when switching users to ensure clean slate.
+   */
+  async disconnectAndClear(): Promise<void> {
+    if (this.powerSyncDb) {
+      await this.powerSyncDb.disconnectAndClear()
+      console.info('PowerSync disconnected and local data cleared')
+    }
+  }
+
+  /**
    * Wait for the first sync to complete.
    * Useful for ensuring data is available before rendering UI.
    */

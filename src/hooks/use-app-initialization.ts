@@ -19,12 +19,38 @@ import { useCallback, useEffect, useState } from 'react'
 
 // Hardcoded user ID for POC (will be replaced with real auth later)
 const POWERSYNC_USER_ID = 'dev-user-001'
+const USER_ID_STORAGE_KEY = 'thunderbolt_powersync_user_id'
 
 const getPowerSyncConfig = (): PowerSyncConfig => ({
   powersyncUrl: import.meta.env.VITE_POWERSYNC_URL || 'http://localhost:8080',
   backendUrl: import.meta.env.VITE_THUNDERBOLT_CLOUD_URL || 'http://localhost:8000/v1',
   userId: POWERSYNC_USER_ID,
 })
+
+/**
+ * Check if user has changed and clear local database if so.
+ * This ensures clean data isolation between users.
+ * Returns true if user changed (database was cleared and reconnected).
+ */
+const handleUserChange = async (): Promise<boolean> => {
+  const previousUserId = localStorage.getItem(USER_ID_STORAGE_KEY)
+
+  if (previousUserId && previousUserId !== POWERSYNC_USER_ID) {
+    console.warn(`[Init] User changed from ${previousUserId} to ${POWERSYNC_USER_ID}, clearing local database...`)
+    const powerSyncDb = DatabaseSingleton.instance.powerSyncDatabase
+    if (powerSyncDb) {
+      await powerSyncDb.disconnectAndClear()
+      // Reconnect with new user credentials
+      await powerSyncDb.connect()
+      console.warn('[Init] Reconnected to PowerSync after user change')
+    }
+    localStorage.setItem(USER_ID_STORAGE_KEY, POWERSYNC_USER_ID)
+    return true
+  }
+
+  localStorage.setItem(USER_ID_STORAGE_KEY, POWERSYNC_USER_ID)
+  return false
+}
 
 const createAppDirectory = async (): Promise<string> => {
   return await createAppDir()
@@ -78,6 +104,13 @@ const executeInitializationSteps = async (httpClient?: HttpClient): Promise<Hand
     }
   }
 
+  // Step 2.25: Handle user change - clear database if user switched
+  try {
+    await handleUserChange()
+  } catch (error) {
+    console.warn('[Init] Failed to handle user change:', error)
+  }
+
   // Step 2.5: Wait for PowerSync first sync before reconciling defaults
   // This ensures we have the latest data from the cloud before checking defaults
   const powerSyncDb = DatabaseSingleton.instance.powerSyncDatabase
@@ -92,7 +125,7 @@ const executeInitializationSteps = async (httpClient?: HttpClient): Promise<Hand
 
   // Step 3: Reconcile default settings
   try {
-    await reconcileDefaults(DatabaseSingleton.instance.db)
+    await reconcileDefaults(DatabaseSingleton.instance.db, POWERSYNC_USER_ID)
   } catch (error) {
     console.error('Failed to reconcile default settings:', error)
     const reconcileError = createHandleError('RECONCILE_DEFAULTS_FAILED', 'Failed to reconcile default settings', error)

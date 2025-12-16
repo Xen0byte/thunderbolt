@@ -75,9 +75,12 @@ const buildUpdateSet = (data: Record<string, unknown> = {}) => {
  * Apply a CRUD operation from PowerSync to the appropriate table.
  *
  * PowerSync operations:
- * - PUT: Insert or replace (upsert)
+ * - PUT: Insert or replace (upsert) using composite key (id, user_id)
  * - PATCH: Update specific fields
  * - DELETE: Soft delete (set deletedAt timestamp)
+ *
+ * Tables use composite primary key (id, user_id) for multi-tenancy,
+ * allowing the same record ID to exist for different users.
  */
 export const applyOperation = async (database: unknown, userId: string, operation: CrudOperation): Promise<void> => {
   const { op, table: tableName, id, data } = operation
@@ -92,11 +95,12 @@ export const applyOperation = async (database: unknown, userId: string, operatio
   switch (op) {
     case 'PUT': {
       const values = buildValues(id, userId, data)
+      // Use composite key (id, userId) for conflict resolution
       await db
         .insert(table)
         .values(values as never)
         .onConflictDoUpdate({
-          target: table.id,
+          target: [table.id, (table as typeof settingsTable).userId],
           set: buildUpdateSet(data) as never,
         })
       break

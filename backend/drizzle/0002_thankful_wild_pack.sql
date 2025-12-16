@@ -1,5 +1,5 @@
 CREATE TABLE "chat_messages" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"content" text NOT NULL,
 	"role" text NOT NULL,
@@ -8,21 +8,27 @@ CREATE TABLE "chat_messages" (
 	"model_id" text,
 	"parent_id" text,
 	"cache" text,
-	"metadata" text
+	"metadata" text,
+	"updated_at" integer,
+	"deleted_at" integer,
+	CONSTRAINT "chat_messages_id_user_id_pk" PRIMARY KEY("id","user_id")
 );
 --> statement-breakpoint
 CREATE TABLE "chat_threads" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"title" text,
 	"is_encrypted" integer DEFAULT 0 NOT NULL,
 	"triggered_by" text,
 	"was_triggered_by_automation" integer DEFAULT 0 NOT NULL,
-	"context_size" integer
+	"context_size" integer,
+	"updated_at" integer,
+	"deleted_at" integer,
+	CONSTRAINT "chat_threads_id_user_id_pk" PRIMARY KEY("id","user_id")
 );
 --> statement-breakpoint
 CREATE TABLE "mcp_servers" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"name" text NOT NULL,
 	"type" text DEFAULT 'http' NOT NULL,
@@ -31,11 +37,13 @@ CREATE TABLE "mcp_servers" (
 	"args" text,
 	"enabled" integer DEFAULT 1 NOT NULL,
 	"created_at" integer,
-	"updated_at" integer
+	"updated_at" integer,
+	"deleted_at" integer,
+	CONSTRAINT "mcp_servers_id_user_id_pk" PRIMARY KEY("id","user_id")
 );
 --> statement-breakpoint
 CREATE TABLE "models" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"provider" text NOT NULL,
 	"name" text NOT NULL,
@@ -48,46 +56,56 @@ CREATE TABLE "models" (
 	"is_confidential" integer DEFAULT 0 NOT NULL,
 	"start_with_reasoning" integer DEFAULT 0 NOT NULL,
 	"context_window" integer,
-	"deleted_at" integer,
 	"default_hash" text,
 	"vendor" text,
-	"description" text
+	"description" text,
+	"updated_at" integer,
+	"deleted_at" integer,
+	CONSTRAINT "models_id_user_id_pk" PRIMARY KEY("id","user_id")
 );
 --> statement-breakpoint
 CREATE TABLE "prompts" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"title" text,
 	"prompt" text NOT NULL,
 	"model_id" text NOT NULL,
+	"default_hash" text,
+	"updated_at" integer,
 	"deleted_at" integer,
-	"default_hash" text
+	CONSTRAINT "prompts_id_user_id_pk" PRIMARY KEY("id","user_id")
 );
 --> statement-breakpoint
 CREATE TABLE "settings" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"value" text,
 	"updated_at" integer,
-	"default_hash" text
+	"default_hash" text,
+	"deleted_at" integer,
+	CONSTRAINT "settings_id_user_id_pk" PRIMARY KEY("id","user_id")
 );
 --> statement-breakpoint
 CREATE TABLE "tasks" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"item" text NOT NULL,
 	"order" integer DEFAULT 0 NOT NULL,
 	"is_complete" integer DEFAULT 0 NOT NULL,
-	"default_hash" text
+	"default_hash" text,
+	"updated_at" integer,
+	"deleted_at" integer,
+	CONSTRAINT "tasks_id_user_id_pk" PRIMARY KEY("id","user_id")
 );
 --> statement-breakpoint
 CREATE TABLE "triggers" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"trigger_type" text NOT NULL,
 	"trigger_time" text,
 	"prompt_id" text NOT NULL,
-	"is_enabled" integer DEFAULT 1 NOT NULL
+	"is_enabled" integer DEFAULT 1 NOT NULL,
+	"updated_at" integer,
+	"deleted_at" integer,
+	CONSTRAINT "triggers_id_user_id_pk" PRIMARY KEY("id","user_id")
 );
---> statement-breakpoint
-DROP TABLE "sync_data" CASCADE;

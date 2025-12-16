@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { DatabaseSingleton } from '../db/singleton'
 import { settingsTable } from '../db/tables'
 import { hashSetting } from '../defaults/settings'
@@ -228,11 +228,14 @@ export const hasSetting = async (key: string): Promise<boolean> => {
  * Note: Uses SELECT-then-INSERT pattern instead of onConflictDoNothing
  * for PowerSync compatibility (views don't support UPSERT).
  */
-export const createSetting = async (key: string, value: string | null): Promise<void> => {
+export const createSetting = async (key: string, value: string | null, userId?: string): Promise<void> => {
   const db = DatabaseSingleton.instance.db
-  const existing = await db.select().from(settingsTable).where(eq(settingsTable.key, key)).get()
+  const whereClause = userId
+    ? and(eq(settingsTable.key, key), eq(settingsTable.userId, userId))
+    : eq(settingsTable.key, key)
+  const existing = await db.select().from(settingsTable).where(whereClause).get()
   if (!existing) {
-    await db.insert(settingsTable).values({ key, value })
+    await db.insert(settingsTable).values({ key, value, ...(userId && { userId }) })
   }
 }
 
