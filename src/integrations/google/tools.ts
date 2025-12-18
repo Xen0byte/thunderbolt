@@ -1,3 +1,4 @@
+import { llmContentCharLimit, truncateText } from '@/lib/utils'
 import type { ToolConfig } from '@/types'
 import ky, { type KyInstance } from 'ky'
 import { z } from 'zod'
@@ -9,7 +10,6 @@ import {
   getHeader,
   parseEmailAddress,
   transformDriveQuery,
-  truncateText,
 } from './utils'
 
 // =============================================================================
@@ -225,6 +225,8 @@ export type DriveFileContent = {
   file_name: string
   mime_type: string
   content: string | null
+  /** When true, content was truncated to prevent context overflow */
+  isTruncated?: boolean
   /** When true, text extraction was not possible */
   extraction_failed?: boolean
   /** Category of failure: 'unsupported_type' | 'access_denied' | 'not_found' */
@@ -741,11 +743,13 @@ export const getDriveFileContent = async (
       }
     }
 
+    const isTruncated = content.length > llmContentCharLimit
     return {
       file_id: fileId,
       file_name: fileName,
       mime_type: mimeType,
-      content,
+      content: isTruncated ? content.substring(0, llmContentCharLimit) + '...[truncated]' : content,
+      isTruncated,
     }
   } catch (error: unknown) {
     const httpError = error as { response?: { status: number } }
