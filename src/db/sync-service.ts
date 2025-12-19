@@ -100,6 +100,8 @@ export type SyncServiceOptions = {
   syncIntervalMs?: number
   onStatusChange?: (status: SyncStatus) => void
   onError?: (error: Error) => void
+  /** Called when tables have been updated from remote changes */
+  onTablesChanged?: (tables: string[]) => void
 }
 
 export class SyncService {
@@ -109,6 +111,7 @@ export class SyncService {
   private status: SyncStatus = 'idle'
   private onStatusChange?: (status: SyncStatus) => void
   private onError?: (error: Error) => void
+  private onTablesChanged?: (tables: string[]) => void
   private isSyncing = false
 
   constructor(options: SyncServiceOptions) {
@@ -116,6 +119,7 @@ export class SyncService {
     this.syncIntervalMs = options.syncIntervalMs ?? 30000 // Default 30 seconds
     this.onStatusChange = options.onStatusChange
     this.onError = options.onError
+    this.onTablesChanged = options.onTablesChanged
   }
 
   /**
@@ -233,8 +237,9 @@ export class SyncService {
 
   /**
    * Pull changes from the server
+   * @returns The list of tables that were updated, or empty array if no changes
    */
-  async pullChanges(): Promise<boolean> {
+  async pullChanges(): Promise<string[]> {
     const serverVersion = this.getServerVersion()
     const siteId = await this.getSiteId()
 
@@ -247,13 +252,21 @@ export class SyncService {
       })
       .json<SyncPullResponse>()
 
+    let affectedTables: string[] = []
+
     if (response.changes.length > 0) {
       const changes = response.changes.map(deserializeChange)
       await this.applyRemoteChanges(changes)
+
+      // Extract unique table names from the changes
+      affectedTables = [...new Set(response.changes.map((c) => c.table))]
+
+      // Notify about changed tables
+      this.onTablesChanged?.(affectedTables)
     }
 
     this.setServerVersion(BigInt(response.serverVersion))
-    return true
+    return affectedTables
   }
 
   /**
