@@ -111,6 +111,26 @@ export const createSyncRoutes = (database: typeof DbType, auth: Auth) => {
 
           const { siteId, changes, migrationVersion } = body
 
+          // Check if client's migration version meets the minimum required version
+          // This prevents outdated clients from pushing changes and advancing their serverVersion pointer
+          const currentUser = await database
+            .select({ syncMigrationVersion: user.syncMigrationVersion })
+            .from(user)
+            .where(eq(user.id, authUser.id))
+            .limit(1)
+
+          const requiredVersion = currentUser[0]?.syncMigrationVersion ?? null
+
+          // If the client's migration version is older than the required version, block push
+          if (requiredVersion && compareMigrationVersions(migrationVersion ?? null, requiredVersion) < 0) {
+            return {
+              success: false,
+              needsUpgrade: true,
+              requiredVersion,
+              serverVersion: '0', // Don't advance the client's pointer
+            }
+          }
+
           if (changes.length === 0) {
             // No changes to push
             const lastChange = await database

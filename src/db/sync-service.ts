@@ -34,6 +34,10 @@ export type SerializedChange = {
 type SyncPushResponse = {
   success: boolean
   serverVersion: string
+  /** If true, the client needs to upgrade to a newer app version */
+  needsUpgrade?: boolean
+  /** The minimum migration version required for sync */
+  requiredVersion?: string
 }
 
 /**
@@ -220,6 +224,7 @@ export class SyncService {
 
   /**
    * Push local changes to the server
+   * @throws Error with 'VERSION_MISMATCH' if client needs upgrade
    */
   async pushChanges(): Promise<boolean> {
     const { changes, dbVersion } = await this.getLocalChanges()
@@ -243,6 +248,16 @@ export class SyncService {
         },
       })
       .json<SyncPushResponse>()
+
+    // Check if we need to upgrade (client migration version is outdated)
+    if (response.needsUpgrade && response.requiredVersion) {
+      this._requiredVersion = response.requiredVersion
+      this.setStatus('version_mismatch')
+      this.onVersionMismatch?.(response.requiredVersion)
+      // Stop the sync service - will need app restart after upgrade
+      this.stop()
+      throw new Error('VERSION_MISMATCH')
+    }
 
     if (response.success) {
       // Update last synced version
@@ -338,7 +353,7 @@ export class SyncService {
     } catch (error) {
       const errorInstance = error instanceof Error ? error : new Error(String(error))
 
-      // Version mismatch is handled in pullChanges - don't override status
+      // Version mismatch is handled in pushChanges/pullChanges - don't override status
       if (errorInstance.message === 'VERSION_MISMATCH') {
         // Status already set to version_mismatch, service already stopped
         return
