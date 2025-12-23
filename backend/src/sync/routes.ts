@@ -146,6 +146,18 @@ export const createSyncRoutes = (database: typeof DbType, auth: Auth) => {
             }
           }
 
+          // IMPORTANT: Update syncMigrationVersion BEFORE inserting changes
+          // This prevents a race condition where another device could pull the new changes
+          // before the migration version is updated, bypassing the version check
+          if (migrationVersion) {
+            if (compareMigrationVersions(migrationVersion, requiredVersion) > 0) {
+              await database
+                .update(user)
+                .set({ syncMigrationVersion: migrationVersion })
+                .where(eq(user.id, authUser.id))
+            }
+          }
+
           // Insert all changes
           // Note: val is already JSON-encoded from cr-sqlite, store it as-is
           const insertedChanges = await database
@@ -189,25 +201,6 @@ export const createSyncRoutes = (database: typeof DbType, auth: Auth) => {
               migrationVersion,
               lastSeenAt: new Date(),
             })
-          }
-
-          // Check if this push has a newer migration version than the user's current sync version
-          // If so, update the user's sync_migration_version (this becomes the new minimum required version)
-          if (migrationVersion) {
-            const currentUser = await database
-              .select({ syncMigrationVersion: user.syncMigrationVersion })
-              .from(user)
-              .where(eq(user.id, authUser.id))
-              .limit(1)
-
-            const currentVersion = currentUser[0]?.syncMigrationVersion ?? null
-
-            if (compareMigrationVersions(migrationVersion, currentVersion) > 0) {
-              await database
-                .update(user)
-                .set({ syncMigrationVersion: migrationVersion })
-                .where(eq(user.id, authUser.id))
-            }
           }
 
           return {
