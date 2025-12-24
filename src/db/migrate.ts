@@ -81,16 +81,42 @@ async function isTableCRR(db: AnyDrizzleDatabase, tableName: string): Promise<bo
 /**
  * Executes database migrations.
  *
- * When running with cr-sqlite, ALTER TABLE statements on CRR tables need special handling.
- * cr-sqlite maintains internal metadata (shadow tables, triggers) for CRDT sync, and this
- * metadata must be updated when the schema changes. We wrap ALTER TABLE statements with:
- * - crsql_begin_alter('table') - tells cr-sqlite to prepare for schema changes
- * - crsql_commit_alter('table') - updates the CRDT metadata to reflect the new schema
+ * ============================================================================
+ * CR-SQLITE SCHEMA MIGRATION HANDLING
+ * ============================================================================
  *
- * IMPORTANT: begin_alter/commit_alter can only be used on tables that are ALREADY CRRs.
- * For tables that haven't been registered as CRRs yet, we:
+ * When running with cr-sqlite, ALTER TABLE statements on CRR tables need special
+ * handling. cr-sqlite maintains internal metadata (shadow tables, triggers) for
+ * CRDT sync, and this metadata must be updated when the schema changes.
+ *
+ * We wrap ALTER TABLE statements with:
+ * - crsql_begin_alter('table') - tells cr-sqlite to prepare for schema changes
+ * - crsql_commit_alter('table') - updates the CRDT metadata to reflect new schema
+ *
+ * KNOWN ISSUE - DB_VERSION RESET:
+ * The crsql_begin_alter/crsql_commit_alter functions have a side effect: they reset
+ * the crsql_db_version() and clear pending changes from crsql_changes. This causes
+ * local changes made before migration to be "forgotten" by cr-sqlite.
+ *
+ * We've implemented a workaround in use-app-initialization.ts that:
+ * 1. Captures pending changes BEFORE migrations run
+ * 2. Runs migrations (with the cr-sqlite functions to update CRR metadata)
+ * 3. Pushes the captured changes AFTER migrations complete
+ *
+ * WHY WE CAN'T SKIP THE CR-SQLITE FUNCTIONS:
+ * If we run ALTER TABLE without crsql_begin_alter/crsql_commit_alter, the CRR
+ * metadata becomes stale and queries fail with "expected X values, got Y" errors.
+ * The triggers expect the old schema but the table has the new columns.
+ *
+ * IMPORTANT: begin_alter/commit_alter can only be used on tables that are ALREADY
+ * CRRs. For tables that haven't been registered as CRRs yet, we:
  * 1. Run the ALTER TABLE normally
  * 2. The table will be registered as a CRR (with the new schema) in initializeCRRs()
+ *
+ * FUTURE RESEARCH:
+ * - Investigate if cr-sqlite has a way to preserve changes during alter
+ * - Consider filing a bug report with vlcn-io/cr-sqlite
+ * - Look into manually preserving clock table data during migrations
  *
  * @returns A promise that resolves when the migrations are complete.
  */
@@ -187,12 +213,16 @@ export async function migrate(db: AnyDrizzleDatabase) {
  * This should be called after migrations when using cr-sqlite.
  *
  * This function handles two scenarios:
- * 1. New tables that haven't been registered as CRRs yet
- * 2. Existing CRRs that may have stale metadata due to ALTER TABLE without proper cr-sqlite handling
+ * 1. New tables that haven't been registered as CRRs yet → uses crsql_as_crr()
+ * 2. Existing CRRs that may have stale metadata → uses begin_alter/commit_alter
  *
- * For case 2, we use the begin_alter/commit_alter pattern to refresh the CRR metadata.
- * This is safe because these functions are idempotent - if the schema hasn't changed,
- * the commit_alter is essentially a no-op.
+ * IMPORTANT - SIDE EFFECT:
+ * For existing CRRs (scenario 2), the crsql_begin_alter/crsql_commit_alter calls
+ * will reset the crsql_db_version() and clear pending changes. This is why we
+ * capture pending changes BEFORE migrations in use-app-initialization.ts.
+ *
+ * The begin_alter/commit_alter calls are necessary to refresh CRR metadata after
+ * any schema changes. Without them, queries would fail with column count mismatches.
  *
  * @param db - The database instance
  * @returns A promise that resolves when CRR initialization is complete
