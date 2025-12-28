@@ -113,6 +113,8 @@ export type SyncServiceOptions = {
   onTablesChanged?: (tables: string[]) => void
   /** Called when a version mismatch is detected (client needs upgrade) */
   onVersionMismatch?: (requiredVersion: string) => void
+  /** Called when chat sessions have been updated from remote changes */
+  onChatSessionsChanged?: (chatThreadIds: string[]) => void
 }
 
 export class SyncService {
@@ -124,6 +126,7 @@ export class SyncService {
   private onError?: (error: Error) => void
   private onTablesChanged?: (tables: string[]) => void
   private onVersionMismatch?: (requiredVersion: string) => void
+  private onChatSessionsChanged?: (chatThreadIds: string[]) => void
   private isSyncing = false
   private _requiredVersion: string | null = null
   private _isOnline: boolean
@@ -139,6 +142,7 @@ export class SyncService {
     this.onError = options.onError
     this.onTablesChanged = options.onTablesChanged
     this.onVersionMismatch = options.onVersionMismatch
+    this.onChatSessionsChanged = options.onChatSessionsChanged
   }
 
   /**
@@ -346,6 +350,19 @@ export class SyncService {
 
       // Notify about changed tables
       this.onTablesChanged?.(affectedTables)
+
+      // Extract chat thread IDs from chat_messages changes
+      const affectedChatThreadIds = [
+        ...new Set(
+          response.changes
+            .filter((c) => c.table === 'chat_messages' && c.cid === 'chat_thread_id' && typeof c.val === 'string')
+            .map((c) => c.val as string),
+        ),
+      ]
+
+      if (affectedChatThreadIds.length > 0) {
+        this.onChatSessionsChanged?.(affectedChatThreadIds)
+      }
     }
 
     this.setServerVersion(BigInt(response.serverVersion))

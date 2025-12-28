@@ -2,11 +2,13 @@
  * Hook for managing the sync service lifecycle and status
  */
 
+import { useChatStore } from '@/chats/chat-store'
+import { useSaveMessages } from '@/chats/use-save-messages'
 import { useHttpClient } from '@/contexts'
 import { getSyncService, initSyncService, type SyncStatus } from '@/db/sync-service'
 import { DatabaseSingleton } from '@/db/singleton'
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 /**
  * Mapping from database table names to React Query keys that should be invalidated
@@ -49,12 +51,17 @@ export type UseSyncServiceResult = {
 export const useSyncService = (): UseSyncServiceResult => {
   const httpClient = useHttpClient()
   const queryClient = useQueryClient()
+  const { createSaveMessages } = useSaveMessages()
   const [status, setStatus] = useState<SyncStatus>('idle')
   const [isRunning, setIsRunning] = useState(false)
   const [lastError, setLastError] = useState<Error | null>(null)
   const [requiredVersion, setRequiredVersion] = useState<string | null>(null)
 
   const isSupported = DatabaseSingleton.instance.isInitialized && DatabaseSingleton.instance.supportsSyncing
+
+  // Use ref to avoid recreating callbacks when createSaveMessages changes
+  const createSaveMessagesRef = useRef(createSaveMessages)
+  createSaveMessagesRef.current = createSaveMessages
 
   /**
    * Invalidate React Query caches for tables that have changed
@@ -82,6 +89,18 @@ export const useSyncService = (): UseSyncServiceResult => {
     [queryClient],
   )
 
+  /**
+   * Recreate chat sessions that have received new messages from sync
+   * Uses ref to always get the latest createSaveMessages without causing re-renders
+   */
+  const recreateChatSessions = useCallback((chatThreadIds: string[]) => {
+    const { recreateSession } = useChatStore.getState()
+    const saveMessages = createSaveMessagesRef.current()
+    for (const threadId of chatThreadIds) {
+      recreateSession(threadId, saveMessages)
+    }
+  }, [])
+
   // Initialize and start sync service
   useEffect(() => {
     if (!isSupported || !httpClient) {
@@ -90,7 +109,7 @@ export const useSyncService = (): UseSyncServiceResult => {
 
     const service = initSyncService({
       httpClient,
-      syncIntervalMs: 30000, // 30 seconds
+      syncIntervalMs: 10000, // 10 seconds
       onStatusChange: (newStatus) => {
         setStatus(newStatus)
       },
@@ -104,6 +123,10 @@ export const useSyncService = (): UseSyncServiceResult => {
       onVersionMismatch: (version) => {
         setRequiredVersion(version)
       },
+      onChatSessionsChanged: (chatThreadIds) => {
+        // Recreate chat sessions that have new messages from sync
+        recreateChatSessions(chatThreadIds)
+      },
     })
 
     service.start()
@@ -113,7 +136,7 @@ export const useSyncService = (): UseSyncServiceResult => {
       service.stop()
       setIsRunning(false)
     }
-  }, [isSupported, httpClient, invalidateQueriesForTables])
+  }, [isSupported, httpClient, invalidateQueriesForTables, recreateChatSessions])
 
   const forceSync = useCallback(async () => {
     const service = getSyncService()
