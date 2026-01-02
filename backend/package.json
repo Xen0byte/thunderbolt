@@ -13,7 +13,8 @@
     "lint": "eslint src",
     "format": "prettier --write src",
     "db": "drizzle-kit",
-    "db:dev": "pglite-server --db=./.pglite/data"
+    "db:dev": "pglite-server --db=./.pglite/data",
+    "eval": "bun run --env-file .env src/promptlayer/cli/run-eval.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.14",
@@ -36,6 +37,7 @@
     "pino": "^9.11.0",
     "postgres": "^3.4.7",
     "posthog-node": "^5.8.8",
+    "promptlayer": "^1.0.57",
     "resend": "^6.5.2",
     "zod": "^3.22.4"
   },
