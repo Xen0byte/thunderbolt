@@ -36,6 +36,7 @@ describe('Proxy Routes', () => {
       exaApiKey: '',
       thunderboltInferenceUrl: '',
       thunderboltInferenceApiKey: '',
+      promptlayerApiKey: '',
       monitoringToken: '',
       googleClientId: '',
       googleClientSecret: '',
