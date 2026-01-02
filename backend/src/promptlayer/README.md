@@ -85,11 +85,27 @@ Run quality evaluations on your datasets using the CLI:
 bun run eval --list-datasets
 
 # Run quality evaluation on a dataset
-bun run eval --dataset <dataset_id>
+bun run eval --dataset <group_id>
 
 # Run with a custom name
-bun run eval --dataset <dataset_id> --name "Production Quality Check"
+bun run eval --dataset <group_id> --name "Production Quality Check"
+
+# Specify which column contains the AI response (default: 'response')
+bun run eval --dataset <group_id> --source-column output
+
+# Show detailed errors
+bun run eval --dataset <group_id> --verbose
 ```
+
+**CLI Options:**
+
+| Option                  | Description                                    |
+| ----------------------- | ---------------------------------------------- |
+| `--dataset <id>`        | Dataset group ID (required)                    |
+| `--name <name>`         | Custom name for the evaluation                 |
+| `--source-column <col>` | Column with AI responses (default: `response`) |
+| `--verbose`             | Show detailed error information                |
+| `--list-datasets`       | List available datasets                        |
 
 **Quality Evaluators** (LLM-as-Judge):
 

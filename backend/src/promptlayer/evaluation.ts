@@ -16,87 +16,71 @@ type LLMAssertionColumn = {
   column_type: 'LLM_ASSERTION'
   name: string
   configuration: {
-    source: string // Column name containing the text to evaluate
-    prompt: string // Evaluation prompt (e.g., "Is this response helpful?")
-    variable_mappings?: Record<string, string> // Map prompt variables to dataset columns
+    source: string
+    prompt: string
   }
   is_part_of_score: boolean
 }
 
-/** Quality evaluation criteria using LLM-as-judge */
-export const QUALITY_EVALUATORS: LLMAssertionColumn[] = [
+/** Quality evaluator definitions (source column is set dynamically) */
+const QUALITY_EVALUATOR_DEFINITIONS = [
   {
-    column_type: 'LLM_ASSERTION',
     name: 'Answer Quality',
-    configuration: {
-      source: 'response', // Assumes dataset has a 'response' column
-      prompt: `Evaluate if this AI response is high quality. Consider:
-- Is it accurate and factually correct?
-- Is it helpful and addresses the user's question?
-- Is it well-structured and easy to understand?
-- Is it complete without unnecessary information?
-
-Respond with TRUE if high quality, FALSE otherwise.`,
-    },
-    is_part_of_score: true,
+    prompt:
+      'Is this response accurate, helpful, well-structured, and complete? Respond TRUE if high quality, FALSE otherwise.',
   },
   {
-    column_type: 'LLM_ASSERTION',
     name: 'Faithfulness',
-    configuration: {
-      source: 'response',
-      prompt: `Does this response stay faithful to the facts without making up information?
-Consider if the AI:
-- Sticks to what it knows
-- Doesn't hallucinate or fabricate details
-- Admits uncertainty when appropriate
-
-Respond with TRUE if faithful, FALSE otherwise.`,
-    },
-    is_part_of_score: true,
+    prompt:
+      'Does this response stick to facts without fabricating information? Respond TRUE if faithful, FALSE otherwise.',
   },
   {
-    column_type: 'LLM_ASSERTION',
     name: 'No Hallucination',
-    configuration: {
-      source: 'response',
-      prompt: `Check if this response contains any hallucinations or made-up information.
-- Are there any false claims?
-- Are there invented facts, names, dates, or statistics?
-- Is there any content that seems fabricated?
-
-Respond with TRUE if no hallucinations detected, FALSE if hallucinations found.`,
-    },
-    is_part_of_score: true,
+    prompt:
+      'Is this response free of made-up facts, names, dates, or statistics? Respond TRUE if no hallucinations, FALSE otherwise.',
   },
   {
-    column_type: 'LLM_ASSERTION',
     name: 'Appropriate Confidence',
-    configuration: {
-      source: 'response',
-      prompt: `Does this response show appropriate confidence levels?
-- Does it express uncertainty when it should?
-- Does it avoid overconfident claims about uncertain topics?
-- Does it properly hedge speculative statements?
-
-Respond with TRUE if confidence is appropriate, FALSE otherwise.`,
-    },
-    is_part_of_score: true,
+    prompt:
+      'Does this response express appropriate uncertainty and avoid overconfident claims? Respond TRUE if appropriate, FALSE otherwise.',
   },
 ]
+
+/** Build quality evaluators for a specific source column */
+export const buildQualityEvaluators = (sourceColumn: string): LLMAssertionColumn[] =>
+  QUALITY_EVALUATOR_DEFINITIONS.map((def) => ({
+    column_type: 'LLM_ASSERTION' as const,
+    name: def.name,
+    configuration: {
+      source: sourceColumn,
+      prompt: def.prompt,
+    },
+    is_part_of_score: true,
+  }))
+
+/** Options for creating a quality evaluation */
+export type CreateQualityEvaluationOptions = {
+  /** Name for the evaluation pipeline */
+  name?: string
+  /** Column name containing the AI response to evaluate (default: 'response') */
+  sourceColumn?: string
+}
 
 /** Create an evaluation pipeline with quality evaluators */
 export const createQualityEvaluation = async (
   datasetGroupId: number,
-  name?: string,
+  options?: CreateQualityEvaluationOptions,
 ): Promise<{ reportId: number; columns: unknown[] }> => {
+  const { name, sourceColumn = 'response' } = options ?? {}
+  const evaluators = buildQualityEvaluators(sourceColumn)
+
   const response = await fetch(`${PROMPTLAYER_API_URL}/reports`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({
       dataset_group_id: datasetGroupId,
       name: name ?? `Quality Evaluation - ${new Date().toISOString()}`,
-      columns: QUALITY_EVALUATORS,
+      columns: evaluators,
     }),
   })
 
@@ -205,20 +189,28 @@ export const waitForEvaluation = async (
   throw new Error(`Evaluation timed out after ${timeoutMs}ms`)
 }
 
+/** Options for running a quality evaluation */
+export type RunQualityEvaluationOptions = {
+  /** Name for the evaluation */
+  name?: string
+  /** Specific dataset version ID (uses latest if not provided) */
+  datasetId?: number
+  /** Column name containing the AI response to evaluate (default: 'response') */
+  sourceColumn?: string
+  /** Progress callback */
+  onProgress?: (message: string) => void
+}
+
 /** Run a complete quality evaluation on a dataset */
 export const runQualityEvaluation = async (
   datasetGroupId: number,
-  options?: {
-    name?: string
-    datasetId?: number
-    onProgress?: (message: string) => void
-  },
+  options?: RunQualityEvaluationOptions,
 ): Promise<{ reportId: number; overallScore: number; details: Record<string, unknown> }> => {
-  const { name, datasetId, onProgress } = options ?? {}
+  const { name, datasetId, sourceColumn, onProgress } = options ?? {}
 
   // Step 1: Create the evaluation pipeline
   onProgress?.('Creating evaluation pipeline...')
-  const { reportId } = await createQualityEvaluation(datasetGroupId, name)
+  const { reportId } = await createQualityEvaluation(datasetGroupId, { name, sourceColumn })
   onProgress?.(`Pipeline created: ${reportId}`)
 
   // Step 2: Run the evaluation

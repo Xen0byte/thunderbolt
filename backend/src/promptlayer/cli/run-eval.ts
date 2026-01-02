@@ -28,27 +28,32 @@ const showHelp = () => {
 PromptLayer Quality Evaluation CLI
 
 Usage:
-  bun run src/promptlayer/cli/run-eval.ts --dataset <id>
-  bun run src/promptlayer/cli/run-eval.ts --list-datasets
+  bun run eval --dataset <id>
+  bun run eval --list-datasets
 
 Options:
-  --dataset <id>    Dataset group ID to evaluate
-  --name <name>     Optional name for the evaluation
-  --list-datasets   List available datasets
-  --help            Show this help message
+  --dataset <id>         Dataset group ID to evaluate
+  --name <name>          Optional name for the evaluation
+  --source-column <col>  Column containing AI responses (default: 'response')
+  --list-datasets        List available datasets
+  --verbose              Show detailed error information
+  --help                 Show this help message
 
 Environment Variables:
   PROMPTLAYER_API_KEY  Your PromptLayer API key (required)
 
 Example:
   # List all datasets
-  bun run src/promptlayer/cli/run-eval.ts --list-datasets
+  bun run eval --list-datasets
 
-  # Run evaluation on dataset ID 123
-  bun run src/promptlayer/cli/run-eval.ts --dataset 123
+  # Run evaluation on dataset group ID 123
+  bun run eval --dataset 123
 
   # Run with a custom name
-  bun run src/promptlayer/cli/run-eval.ts --dataset 123 --name "Production Quality Check"
+  bun run eval --dataset 123 --name "Production Quality Check"
+
+  # Specify which column contains the AI response
+  bun run eval --dataset 123 --source-column output
 `)
 }
 
@@ -113,17 +118,21 @@ const main = async () => {
   }
 
   const name = getFlagValue('--name')
+  const sourceColumn = getFlagValue('--source-column') ?? 'response'
+  const verbose = hasFlag('--verbose')
 
   console.log('\n' + '═'.repeat(60))
   console.log('🧪 PROMPTLAYER QUALITY EVALUATION')
   console.log('═'.repeat(60))
-  console.log(`Dataset ID: ${datasetGroupId}`)
+  console.log(`Dataset Group ID: ${datasetGroupId}`)
+  console.log(`Source Column: ${sourceColumn}`)
   if (name) console.log(`Name: ${name}`)
   console.log('')
 
   try {
     const result = await runQualityEvaluation(datasetGroupId, {
       name,
+      sourceColumn,
       onProgress: (message) => console.log(`   ${message}`),
     })
 
@@ -143,6 +152,12 @@ const main = async () => {
     console.log(`   https://www.promptlayer.com/evaluations/${result.reportId}`)
   } catch (error) {
     console.error('\n❌ Evaluation failed:', (error as Error).message)
+    if (verbose) {
+      console.error('\nStack trace:')
+      console.error((error as Error).stack)
+    } else {
+      console.error('   Use --verbose for more details')
+    }
     process.exit(1)
   }
 }
