@@ -335,14 +335,22 @@ export class SyncService {
 
     let affectedTables: string[] = []
 
-    // Apply remote changes and update last synced version
-    // This is crucial: after applying remote changes, we must update lastSyncedVersion
-    // to the new local db_version so these changes don't get pushed back on the next sync
+    // Apply remote changes to the local database
+    // Note: We do NOT update lastSyncedVersion here anymore.
+    //
+    // Previously, we set lastSyncedVersion to the new db_version after applying
+    // remote changes to "prevent re-pushing" them. However, this caused a race condition:
+    //   1. Push starts, captures dbVersion = 5
+    //   2. User makes local changes during push (dbVersion = 7)
+    //   3. Push completes, sets lastSyncedVersion = 5
+    //   4. Pull runs, applies remote changes (dbVersion = 8)
+    //   5. Set lastSyncedVersion = 8 <- BUG: Skips local changes at versions 6-7!
+    //
+    // The fix: getChanges() now filters by site_id = crsql_site_id(), so it only
+    // returns LOCAL changes. Remote changes (with different site_ids) won't appear
+    // in getChanges results, so there's no need to update lastSyncedVersion here.
     const changes = response.changes.map(deserializeChange)
-    const localDbVersion = await this.applyRemoteChanges(changes)
-
-    // Update last synced version to prevent re-pushing applied changes
-    this.setLastSyncedVersion(localDbVersion)
+    await this.applyRemoteChanges(changes)
 
     if (response.changes.length > 0) {
       // Extract unique table names from the changes

@@ -203,6 +203,15 @@ type SerializedCRSQLChangeOut = Omit<CRSQLChange, 'col_version' | 'db_version'> 
 /**
  * Get changes from crsql_changes since the given version
  * Returns BigInt values as strings for postMessage compatibility
+ *
+ * IMPORTANT: Only returns changes from the LOCAL site (our own changes).
+ * Changes received from other devices (via applyChanges) have different site_ids
+ * and should not be re-pushed to the server.
+ *
+ * This prevents a race condition where:
+ * 1. Push captures dbVersion at start
+ * 2. Pull applies remote changes, incrementing dbVersion
+ * 3. Without site_id filtering, those remote changes would be re-pushed
  */
 const getChangesInternal = async (
   sinceVersion: string | bigint,
@@ -218,11 +227,13 @@ const getChangesInternal = async (
   const versionResult = await db.execA<[bigint]>('SELECT crsql_db_version()')
   const dbVersion = versionResult[0]?.[0] ?? 0n
 
-  // Get all changes since the given version
+  // Get only LOCAL changes since the given version
+  // Filter by site_id = crsql_site_id() to exclude changes from other devices
+  // This is crucial for preventing re-pushing of changes received via sync
   const changes = await db.execO<CRSQLChange>(
     `SELECT "table", "pk", "cid", "val", "col_version", "db_version", "site_id", "cl", "seq"
      FROM crsql_changes
-     WHERE db_version > ?
+     WHERE db_version > ? AND site_id = crsql_site_id()
      ORDER BY db_version, seq`,
     [sinceVersionBigInt],
   )
