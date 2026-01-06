@@ -1,0 +1,6 @@
+# Environment files
+.env
+
+# Promptfoo data directory (SQLite database and cached data)
+promptfoo_data/
+
