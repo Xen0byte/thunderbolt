@@ -20,6 +20,12 @@ help:
 	@echo "  make clean          - Clean build artifacts"
 	@echo "  make format         - Format frontend, backend (JS/TS), and Rust code"
 	@echo "  make format-check   - Check formatting for frontend, backend, and Rust code"
+	@echo ""
+	@echo "Promptfoo (LLM Evaluation & Red Teaming):"
+	@echo "  make promptfoo-up      - Start Promptfoo self-hosted server"
+	@echo "  make promptfoo-down    - Stop Promptfoo server"
+	@echo "  make promptfoo-logs    - View Promptfoo logs"
+	@echo "  make promptfoo-restart - Restart Promptfoo server"
 
 # Setup project - install frontend and backend dependencies
 setup:
@@ -127,3 +133,22 @@ run:
 
 # Alias for run
 dev: run
+
+# Promptfoo self-hosted management
+promptfoo-up:
+	@echo "$(BLUE)→ Starting Promptfoo self-hosted server...$(NC)"
+	cd backend/docker && docker compose up -d
+	@echo "$(GREEN)✓ Promptfoo running at http://localhost:3001$(NC)"
+
+promptfoo-down:
+	@echo "$(BLUE)→ Stopping Promptfoo server...$(NC)"
+	cd backend/docker && docker compose down
+	@echo "$(GREEN)✓ Promptfoo stopped$(NC)"
+
+promptfoo-logs:
+	cd backend/docker && docker compose logs -f promptfoo
+
+promptfoo-restart:
+	@echo "$(BLUE)→ Restarting Promptfoo server...$(NC)"
+	cd backend/docker && docker compose restart
+	@echo "$(GREEN)✓ Promptfoo restarted$(NC)"
