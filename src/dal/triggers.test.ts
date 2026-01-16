@@ -1,7 +1,7 @@
 import { DatabaseSingleton } from '@/db/singleton'
 import { modelsTable, promptsTable, triggersTable } from '@/db/tables'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 import {
   createTrigger,
@@ -250,9 +250,14 @@ describe('Triggers DAL', () => {
       expect(triggersAfter).toHaveLength(0)
 
       // But should still exist in database with deletedAt set
-      const rawTriggers = await db.select().from(triggersTable).where(eq(triggersTable.promptId, promptId))
+      // Note: promptId is now null (scrubbed) after soft delete, so we query by id
+      const rawTriggers = await db
+        .select()
+        .from(triggersTable)
+        .where(inArray(triggersTable.id, [triggerId1, triggerId2]))
       expect(rawTriggers).toHaveLength(2)
       expect(rawTriggers.every((t) => t.deletedAt !== null)).toBe(true)
+      expect(rawTriggers.every((t) => t.promptId === null)).toBe(true) // FK column is scrubbed
     })
 
     it('should only soft delete triggers for the specified prompt', async () => {
@@ -309,6 +314,12 @@ describe('Triggers DAL', () => {
       // Both should still exist in database
       const rawTriggers = await db.select().from(triggersTable)
       expect(rawTriggers).toHaveLength(2)
+
+      // Verify trigger1 has promptId scrubbed to null, trigger2 still has promptId
+      const trigger1 = rawTriggers.find((t) => t.id === triggerId1)
+      const trigger2 = rawTriggers.find((t) => t.id === triggerId2)
+      expect(trigger1?.promptId).toBeNull()
+      expect(trigger2?.promptId).toBe(promptId2)
     })
 
     it('should not throw when no triggers exist for prompt', async () => {
@@ -426,13 +437,19 @@ describe('Triggers DAL', () => {
       await deleteTriggersForPrompt(promptId)
 
       // Verify original deletedAt is preserved for already-deleted trigger
-      const rawTriggers = await db.select().from(triggersTable).where(eq(triggersTable.promptId, promptId))
+      // Note: promptId is scrubbed for newly deleted triggers, so query by id
+      const rawTriggers = await db
+        .select()
+        .from(triggersTable)
+        .where(inArray(triggersTable.id, [triggerId1, triggerId2]))
       const alreadyDeletedTrigger = rawTriggers.find((t) => t.id === triggerId1)
       const newlyDeletedTrigger = rawTriggers.find((t) => t.id === triggerId2)
 
       expect(alreadyDeletedTrigger?.deletedAt).toBe(originalDeletedAt)
       expect(newlyDeletedTrigger?.deletedAt).not.toBe(originalDeletedAt)
       expect(newlyDeletedTrigger?.deletedAt).not.toBeNull()
+      // Newly deleted trigger has promptId scrubbed
+      expect(newlyDeletedTrigger?.promptId).toBeNull()
     })
   })
 
@@ -547,6 +564,8 @@ describe('Triggers DAL', () => {
       expect(alreadyDeletedTrigger?.deletedAt).toBe(originalDeletedAt)
       expect(newlyDeletedTrigger?.deletedAt).not.toBe(originalDeletedAt)
       expect(newlyDeletedTrigger?.deletedAt).not.toBeNull()
+      // Newly deleted trigger has promptId scrubbed
+      expect(newlyDeletedTrigger?.promptId).toBeNull()
     })
   })
 

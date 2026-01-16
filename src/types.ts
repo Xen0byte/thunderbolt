@@ -47,8 +47,10 @@ export type McpServerRow = InferSelectModel<typeof mcpServersTable>
 export type PromptRow = InferSelectModel<typeof promptsTable>
 export type TriggerRow = InferSelectModel<typeof triggersTable>
 
-// Application types - Row types with previously-required fields made non-null
-export type ChatMessage = WithRequired<ChatMessageRow, 'content' | 'role'>
+// Application types - Row types with required fields made non-null
+// These maintain application-level guarantees for complete records,
+// while the database schema allows nulls for cr-sqlite CRR convergence.
+export type ChatMessage = WithRequired<ChatMessageRow, 'content' | 'role' | 'chatThreadId'>
 export type ChatThread = WithRequired<ChatThreadRow, 'isEncrypted' | 'wasTriggeredByAutomation'>
 export type Model = WithRequired<
   ModelRow,
@@ -63,8 +65,8 @@ export type Model = WithRequired<
 >
 export type Task = WithRequired<TaskRow, 'item' | 'order' | 'isComplete'>
 export type McpServer = WithRequired<McpServerRow, 'name' | 'type' | 'enabled'>
-export type Prompt = WithRequired<PromptRow, 'prompt'>
-export type Trigger = WithRequired<TriggerRow, 'triggerType' | 'isEnabled'>
+export type Prompt = WithRequired<PromptRow, 'prompt' | 'modelId'>
+export type Trigger = WithRequired<TriggerRow, 'triggerType' | 'isEnabled' | 'promptId'>
 
 export type AutomationRun = {
   prompt: Prompt | null
