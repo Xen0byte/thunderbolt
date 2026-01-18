@@ -63,8 +63,8 @@ export type Model = WithRequired<
 >
 export type Task = WithRequired<TaskRow, 'item' | 'order' | 'isComplete'>
 export type McpServer = WithRequired<McpServerRow, 'name' | 'type' | 'enabled'>
-export type Prompt = WithRequired<PromptRow, 'prompt'>
-export type Trigger = WithRequired<TriggerRow, 'triggerType' | 'isEnabled'>
+export type Prompt = WithRequired<PromptRow, 'prompt' | 'modelId'>
+export type Trigger = WithRequired<TriggerRow, 'triggerType' | 'isEnabled' | 'promptId'>
 
 export type AutomationRun = {
   prompt: Prompt | null

@@ -327,8 +327,10 @@ describe('Chat Messages DAL', () => {
     })
   })
 
-  describe('cascade delete with parent_id', () => {
-    it('should delete child messages when parent is deleted', async () => {
+  describe('parent_id relationship', () => {
+    it('should maintain parent_id relationship when deleting parent (no FK cascade)', async () => {
+      // Note: Schema uses NO foreign key constraints for CRDT/sync compatibility
+      // Deleting a parent does NOT automatically delete children - this is intentional
       const threadId = uuidv7()
       const parentMessageId = uuidv7()
       const childMessageId = uuidv7()
@@ -357,113 +359,62 @@ describe('Chat Messages DAL', () => {
         },
       ])
 
-      // Delete parent message
+      // Delete parent message - child should remain (no FK cascade)
       await db.delete(chatMessagesTable).where(eq(chatMessagesTable.id, parentMessageId))
 
-      // Child should be deleted by cascade
-      const messages = await db.select().from(chatMessagesTable).where(eq(chatMessagesTable.chatThreadId, threadId))
-      expect(messages).toHaveLength(0)
-    })
-
-    it('should delete entire chain when root message is deleted', async () => {
-      const threadId = uuidv7()
-      const msg1Id = uuidv7()
-      const msg2Id = uuidv7()
-      const msg3Id = uuidv7()
-      const msg4Id = uuidv7()
-      const db = DatabaseSingleton.instance.db
-
-      await db.insert(chatThreadsTable).values({
-        id: threadId,
-        title: 'Test Thread',
-        isEncrypted: 0,
-      })
-
-      // Create a chain: msg1 -> msg2 -> msg3 -> msg4
-      await db.insert(chatMessagesTable).values([
-        {
-          id: msg1Id,
-          chatThreadId: threadId,
-          role: 'user',
-          content: 'Message 1',
-          parentId: null,
-        },
-        {
-          id: msg2Id,
-          chatThreadId: threadId,
-          role: 'assistant',
-          content: 'Message 2',
-          parentId: msg1Id,
-        },
-        {
-          id: msg3Id,
-          chatThreadId: threadId,
-          role: 'user',
-          content: 'Message 3',
-          parentId: msg2Id,
-        },
-        {
-          id: msg4Id,
-          chatThreadId: threadId,
-          role: 'assistant',
-          content: 'Message 4',
-          parentId: msg3Id,
-        },
-      ])
-
-      // Delete root message
-      await db.delete(chatMessagesTable).where(eq(chatMessagesTable.id, msg1Id))
-
-      // All messages should be deleted by cascade
-      const messages = await db.select().from(chatMessagesTable).where(eq(chatMessagesTable.chatThreadId, threadId))
-      expect(messages).toHaveLength(0)
-    })
-
-    it('should delete only descendant branch when deleting middle message', async () => {
-      const threadId = uuidv7()
-      const msg1Id = uuidv7()
-      const msg2Id = uuidv7()
-      const msg3Id = uuidv7()
-      const db = DatabaseSingleton.instance.db
-
-      await db.insert(chatThreadsTable).values({
-        id: threadId,
-        title: 'Test Thread',
-        isEncrypted: 0,
-      })
-
-      // Create chain: msg1 -> msg2 -> msg3
-      await db.insert(chatMessagesTable).values([
-        {
-          id: msg1Id,
-          chatThreadId: threadId,
-          role: 'user',
-          content: 'Message 1',
-          parentId: null,
-        },
-        {
-          id: msg2Id,
-          chatThreadId: threadId,
-          role: 'assistant',
-          content: 'Message 2',
-          parentId: msg1Id,
-        },
-        {
-          id: msg3Id,
-          chatThreadId: threadId,
-          role: 'user',
-          content: 'Message 3',
-          parentId: msg2Id,
-        },
-      ])
-
-      // Delete middle message
-      await db.delete(chatMessagesTable).where(eq(chatMessagesTable.id, msg2Id))
-
-      // msg1 should remain, msg2 and msg3 should be deleted
+      // Child should still exist (orphaned parent_id is allowed for CRDT sync)
       const messages = await db.select().from(chatMessagesTable).where(eq(chatMessagesTable.chatThreadId, threadId))
       expect(messages).toHaveLength(1)
-      expect(messages[0]?.id).toBe(msg1Id)
+      expect(messages[0]?.id).toBe(childMessageId)
+      expect(messages[0]?.parentId).toBe(parentMessageId) // Still references deleted parent
+    })
+
+    it('should allow orphaned parent_id references for sync compatibility', async () => {
+      // This tests that data can arrive out of order during sync
+      // A message can reference a parent_id that doesn't exist yet
+      const threadId = uuidv7()
+      const parentMessageId = uuidv7()
+      const childMessageId = uuidv7()
+      const db = DatabaseSingleton.instance.db
+
+      await db.insert(chatThreadsTable).values({
+        id: threadId,
+        title: 'Test Thread',
+        isEncrypted: 0,
+      })
+
+      // Insert child first with reference to non-existent parent
+      await db.insert(chatMessagesTable).values({
+        id: childMessageId,
+        chatThreadId: threadId,
+        role: 'assistant',
+        content: 'Child message',
+        parentId: parentMessageId, // Parent doesn't exist yet
+      })
+
+      // Child should be insertable with orphaned parent reference
+      const messagesBeforeParent = await db
+        .select()
+        .from(chatMessagesTable)
+        .where(eq(chatMessagesTable.chatThreadId, threadId))
+      expect(messagesBeforeParent).toHaveLength(1)
+      expect(messagesBeforeParent[0]?.parentId).toBe(parentMessageId)
+
+      // Now insert the parent (simulating out-of-order sync)
+      await db.insert(chatMessagesTable).values({
+        id: parentMessageId,
+        chatThreadId: threadId,
+        role: 'user',
+        content: 'Parent message',
+        parentId: null,
+      })
+
+      // Both messages should exist with proper relationship
+      const messagesAfterParent = await db
+        .select()
+        .from(chatMessagesTable)
+        .where(eq(chatMessagesTable.chatThreadId, threadId))
+      expect(messagesAfterParent).toHaveLength(2)
     })
   })
 })

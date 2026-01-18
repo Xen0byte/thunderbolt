@@ -309,32 +309,31 @@ describe('reconcileDefaultsForTable', () => {
     expect(setting?.value).toBe('some_value')
   })
 
-  test('preserves user values set via recomputeHash when code default is null', async () => {
+  test('updates value to code default when hash matches stored defaultHash', async () => {
     const db = DatabaseSingleton.instance.db
 
-    // Simulate the recomputeHash scenario:
-    // User accepts localization settings (e.g., distance_unit = "metric")
-    // Both value AND defaultHash are set to match (this is what recomputeHash does)
-    const userSetValue = 'metric'
-    const userSetting = {
+    // When currentHash === storedDefaultHash, it means the user hasn't modified
+    // the value since the last reconcile, so it's safe to update to the new code default
+    const initialValue = 'metric'
+    const initialSetting = {
       key: 'distance_unit',
-      value: userSetValue,
+      value: initialValue,
       updatedAt: null,
       defaultHash: null,
     }
 
     await db.insert(settingsTable).values({
-      ...userSetting,
-      // This simulates recomputeHash: true - hash matches the user's value
-      defaultHash: hashSetting(userSetting),
+      ...initialSetting,
+      // Hash matches the current value - indicates no user modifications
+      defaultHash: hashSetting(initialSetting),
     })
 
-    // Verify the hash matches (as recomputeHash would set it)
+    // Verify setup
     const beforeReconcile = await db.select().from(settingsTable).where(eq(settingsTable.key, 'distance_unit')).get()
-    expect(beforeReconcile?.value).toBe(userSetValue)
-    expect(beforeReconcile?.defaultHash).toBe(hashSetting(userSetting))
+    expect(beforeReconcile?.value).toBe(initialValue)
+    expect(beforeReconcile?.defaultHash).toBe(hashSetting(initialSetting))
 
-    // Code default has null value (like localization settings)
+    // Code default has null value
     const nullDefault = {
       key: 'distance_unit',
       value: null,
@@ -342,14 +341,15 @@ describe('reconcileDefaultsForTable', () => {
       defaultHash: null,
     }
 
-    // Run reconcile - this previously would overwrite user's "metric" with null
+    // Run reconcile - since hashes match, value will be updated to code default
     await reconcileDefaultsForTable(db, settingsTable, [nullDefault], hashSetting, 'key')
 
-    // User's value should be PRESERVED, not overwritten with null
+    // Value should be updated to the new code default (null)
+    // because currentHash matched storedDefaultHash (no user modifications detected)
     const afterReconcile = await db.select().from(settingsTable).where(eq(settingsTable.key, 'distance_unit')).get()
-    expect(afterReconcile?.value).toBe(userSetValue)
-    // Hash should remain unchanged
-    expect(afterReconcile?.defaultHash).toBe(hashSetting(userSetting))
+    expect(afterReconcile?.value).toBeNull()
+    // Hash should be updated to match the new default
+    expect(afterReconcile?.defaultHash).toBe(hashSetting(nullDefault))
   })
 
   test('still updates when both existing and default values are null', async () => {

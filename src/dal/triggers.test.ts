@@ -198,7 +198,7 @@ describe('Triggers DAL', () => {
   })
 
   describe('deleteTriggersForPrompt', () => {
-    it('should soft delete all triggers for a prompt (set deletedAt)', async () => {
+    it('should soft delete all triggers for a prompt (set deletedAt and clear nullable columns)', async () => {
       const db = DatabaseSingleton.instance.db
       const modelId = uuidv7()
       const promptId = uuidv7()
@@ -249,10 +249,17 @@ describe('Triggers DAL', () => {
       const triggersAfter = await getAllTriggersForPrompt(promptId)
       expect(triggersAfter).toHaveLength(0)
 
-      // But should still exist in database with deletedAt set
-      const rawTriggers = await db.select().from(triggersTable).where(eq(triggersTable.promptId, promptId))
-      expect(rawTriggers).toHaveLength(2)
-      expect(rawTriggers.every((t) => t.deletedAt !== null)).toBe(true)
+      // Query by ID since nullable columns (including promptId) are cleared on soft delete
+      const rawTrigger1 = await db.select().from(triggersTable).where(eq(triggersTable.id, triggerId1)).get()
+      const rawTrigger2 = await db.select().from(triggersTable).where(eq(triggersTable.id, triggerId2)).get()
+
+      expect(rawTrigger1).toBeDefined()
+      expect(rawTrigger2).toBeDefined()
+      expect(rawTrigger1?.deletedAt).not.toBeNull()
+      expect(rawTrigger2?.deletedAt).not.toBeNull()
+      // Nullable columns are cleared for privacy on soft delete
+      expect(rawTrigger1?.promptId).toBeNull()
+      expect(rawTrigger1?.triggerTime).toBeNull()
     })
 
     it('should only soft delete triggers for the specified prompt', async () => {

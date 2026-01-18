@@ -48,3 +48,5 @@ mise.toml
 src-tauri/gen/apple/vendor/
 src-tauri/gen/apple/.bundle/
 
+# Build artifacts copied during vite build
+public/crsqlite.wasm

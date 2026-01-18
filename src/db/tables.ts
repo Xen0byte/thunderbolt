@@ -1,3 +1,15 @@
+/**
+ * Database schema for cr-sqlite CRRs (Conflict-free Replicated Relations)
+ *
+ * Important constraints for cr-sqlite compatibility:
+ * 1. NO unique indices besides primary keys - CRRs can't have additional unique constraints
+ * 2. NO checked foreign key constraints - data can arrive out of order during sync
+ * 3. All NOT NULL columns must have DEFAULT values - for forwards/backwards compatibility
+ *
+ * Relationships are maintained logically via column names (e.g., chatThreadId -> chat_threads.id)
+ * but are NOT enforced at the database level to enable CRDT-based sync.
+ */
+
 import type { WidgetCacheData } from '@/widgets'
 import type { UIMessage } from 'ai'
 import type { UIMessageMetadata } from '@/types'
@@ -14,10 +26,10 @@ export const settingsTable = sqliteTable('settings', {
 export const chatThreadsTable = sqliteTable(
   'chat_threads',
   {
-    id: text('id').primaryKey().notNull().unique(),
+    id: text('id').primaryKey(),
     title: text('title'),
     isEncrypted: integer('is_encrypted').default(0),
-    triggeredBy: text('triggered_by').references(() => promptsTable.id, { onDelete: 'set null' }),
+    triggeredBy: text('triggered_by'),
     wasTriggeredByAutomation: integer('was_triggered_by_automation').default(0),
     contextSize: integer('context_size'),
     deletedAt: integer('deleted_at'),
@@ -32,15 +44,13 @@ export const chatThreadsTable = sqliteTable(
 export const chatMessagesTable = sqliteTable(
   'chat_messages',
   {
-    id: text('id').primaryKey().notNull().unique(),
+    id: text('id').primaryKey(),
     content: text('content'),
     role: text('role').$type<UIMessage['role']>(),
     parts: text('parts', { mode: 'json' }).$type<UIMessage['parts']>(),
-    chatThreadId: text('chat_thread_id')
-      .notNull()
-      .references(() => chatThreadsTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
-    modelId: text('model_id').references(() => modelsTable.id),
-    parentId: text('parent_id').references((): any => chatMessagesTable.id, { onDelete: 'cascade' }),
+    chatThreadId: text('chat_thread_id'),
+    modelId: text('model_id'),
+    parentId: text('parent_id'),
     cache: text('cache', { mode: 'json' }).$type<Record<string, WidgetCacheData>>(),
     metadata: text('metadata', { mode: 'json' }).$type<UIMessageMetadata>(),
     deletedAt: integer('deleted_at'),
@@ -55,7 +65,7 @@ export const chatMessagesTable = sqliteTable(
 export const tasksTable = sqliteTable(
   'tasks',
   {
-    id: text('id').primaryKey().notNull().unique(),
+    id: text('id').primaryKey(),
     item: text('item'),
     order: integer('order').default(0),
     isComplete: integer('is_complete').default(0),
@@ -72,7 +82,7 @@ export const tasksTable = sqliteTable(
 export const modelsTable = sqliteTable(
   'models',
   {
-    id: text('id').primaryKey().notNull().unique(),
+    id: text('id').primaryKey(),
     provider: text('provider', {
       enum: ['openai', 'custom', 'openrouter', 'thunderbolt', 'anthropic'],
     }),
@@ -102,7 +112,7 @@ export const modelsTable = sqliteTable(
 export const mcpServersTable = sqliteTable(
   'mcp_servers',
   {
-    id: text('id').primaryKey().notNull().unique(),
+    id: text('id').primaryKey(),
     name: text('name'),
     type: text('type', { enum: ['http', 'stdio'] }).default('http'),
     url: text('url'),
@@ -123,12 +133,10 @@ export const mcpServersTable = sqliteTable(
 export const promptsTable = sqliteTable(
   'prompts',
   {
-    id: text('id').primaryKey().notNull().unique(),
+    id: text('id').primaryKey(),
     title: text('title'),
     prompt: text('prompt'),
-    modelId: text('model_id')
-      .notNull()
-      .references(() => modelsTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    modelId: text('model_id'),
     deletedAt: integer('deleted_at'),
     defaultHash: text('default_hash'),
   },
@@ -142,12 +150,10 @@ export const promptsTable = sqliteTable(
 export const triggersTable = sqliteTable(
   'triggers',
   {
-    id: text('id').primaryKey().notNull().unique(),
+    id: text('id').primaryKey(),
     triggerType: text('trigger_type', { enum: ['time'] }),
     triggerTime: text('trigger_time'),
-    promptId: text('prompt_id')
-      .notNull()
-      .references(() => promptsTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    promptId: text('prompt_id'),
     isEnabled: integer('is_enabled').default(1),
     deletedAt: integer('deleted_at'),
   },
