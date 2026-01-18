@@ -7,6 +7,7 @@ import { useSaveMessages } from '@/chats/use-save-messages'
 import { getSyncService, initSyncService, type SyncStatus } from '@/db/sync-service'
 import { DatabaseSingleton } from '@/db/singleton'
 import { useSettings } from '@/hooks/use-settings'
+import { useSyncEnabled } from '@/hooks/use-sync-enabled'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -44,6 +45,10 @@ export type UseSyncServiceResult = {
   isSupported: boolean
   /** Whether the sync service is running */
   isRunning: boolean
+  /** Whether sync is enabled (user preference) */
+  isEnabled: boolean
+  /** Toggle sync enabled state */
+  toggleEnabled: () => void
   /** Force an immediate sync */
   forceSync: () => Promise<void>
   /** Start the sync service */
@@ -64,6 +69,7 @@ export const useSyncService = (): UseSyncServiceResult => {
   const { cloudUrl } = useSettings({ cloud_url: 'http://localhost:8000/v1' })
   const queryClient = useQueryClient()
   const { createSaveMessages } = useSaveMessages()
+  const { isEnabled, toggle: toggleEnabled } = useSyncEnabled()
   const [status, setStatus] = useState<SyncStatus>('idle')
   const [isRunning, setIsRunning] = useState(false)
   const [lastError, setLastError] = useState<Error | null>(null)
@@ -115,7 +121,15 @@ export const useSyncService = (): UseSyncServiceResult => {
 
   // Initialize and start sync service
   useEffect(() => {
-    if (!isSupported || !cloudUrl.value) {
+    // Don't start if sync is disabled, not supported, or no cloud URL
+    if (!isEnabled || !isSupported || !cloudUrl.value) {
+      // If we have an existing service and sync was disabled, stop it
+      const existingService = getSyncService()
+      if (existingService) {
+        existingService.stop()
+        setIsRunning(false)
+        setStatus('idle')
+      }
       return
     }
 
@@ -149,7 +163,7 @@ export const useSyncService = (): UseSyncServiceResult => {
       service.stop()
       setIsRunning(false)
     }
-  }, [isSupported, cloudUrl.value, invalidateQueriesForTables, recreateChatSessions])
+  }, [isEnabled, isSupported, cloudUrl.value, invalidateQueriesForTables, recreateChatSessions])
 
   const forceSync = useCallback(async () => {
     const service = getSyncService()
@@ -178,6 +192,8 @@ export const useSyncService = (): UseSyncServiceResult => {
     status,
     isSupported,
     isRunning,
+    isEnabled,
+    toggleEnabled,
     forceSync,
     start,
     stop,

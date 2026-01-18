@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { AlertTriangle, Cloud, CloudOff, Loader2, RefreshCw } from 'lucide-react'
 import type { FC } from 'react'
 import { Button } from './ui/button'
+import { Switch } from './ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
 
 const statusConfig: Record<SyncStatus, { icon: typeof Cloud; label: string; color: string }> = {
@@ -56,60 +57,84 @@ type SyncStatusIndicatorProps = {
 /**
  * Sync status indicator showing the current sync state
  * Displays an icon with optional label and allows manual sync trigger
+ * Includes a switch to enable/disable sync
  */
 export const SyncStatusIndicator: FC<SyncStatusIndicatorProps> = ({ className, showLabel = false, size = 'md' }) => {
-  const { status, isSupported, forceSync } = useSyncService()
+  const { status, isSupported, isEnabled, toggleEnabled, forceSync } = useSyncService()
 
   // Don't show anything if sync is not supported
   if (!isSupported) {
     return null
   }
 
-  const config = statusConfig[status]
+  const config = isEnabled ? statusConfig[status] : statusConfig.offline
   const Icon = config.icon
   const iconSize = size === 'sm' ? 14 : 16
   const isVersionMismatch = status === 'version_mismatch'
-  const canSync = status !== 'syncing' && status !== 'connecting' && !isVersionMismatch
+  const canSync = isEnabled && status !== 'syncing' && status !== 'connecting' && !isVersionMismatch
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn('gap-1.5 px-2', className)}
-            onClick={() => canSync && forceSync()}
-          >
-            <Icon
-              size={iconSize}
-              className={cn(config.color, (status === 'syncing' || status === 'connecting') && 'animate-spin')}
-              aria-hidden="true"
-            />
-            {showLabel && <span className={cn('text-xs', config.color)}>{config.label}</span>}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-xs">
-          {isVersionMismatch ? (
-            <div className="flex flex-col gap-1">
-              <span className="font-medium">Sync paused - app update required</span>
-              <span className="text-muted-foreground text-xs">
-                Another device has synced with a newer version. Please update the app to continue syncing.
-              </span>
+    <div className={cn('flex items-center gap-1', className)}>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center">
+              <Switch checked={isEnabled} onCheckedChange={toggleEnabled} aria-label="Toggle sync" />
             </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span>{config.label}</span>
-              {canSync && (
-                <span className="text-muted-foreground text-xs flex items-center gap-1">
-                  <RefreshCw size={12} />
-                  Click to sync
-                </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <span>{isEnabled ? 'Disable sync' : 'Enable sync'}</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 px-2"
+              onClick={() => canSync && forceSync()}
+              disabled={!isEnabled}
+            >
+              <Icon
+                size={iconSize}
+                className={cn(
+                  config.color,
+                  isEnabled && (status === 'syncing' || status === 'connecting') && 'animate-spin',
+                )}
+                aria-hidden="true"
+              />
+              {showLabel && (
+                <span className={cn('text-xs', config.color)}>{isEnabled ? config.label : 'Sync disabled'}</span>
               )}
-            </div>
-          )}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs">
+            {!isEnabled ? (
+              <span>Sync is disabled</span>
+            ) : isVersionMismatch ? (
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">Sync paused - app update required</span>
+                <span className="text-muted-foreground text-xs">
+                  Another device has synced with a newer version. Please update the app to continue syncing.
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span>{config.label}</span>
+                {canSync && (
+                  <span className="text-muted-foreground text-xs flex items-center gap-1">
+                    <RefreshCw size={12} />
+                    Click to sync
+                  </span>
+                )}
+              </div>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
   )
 }
