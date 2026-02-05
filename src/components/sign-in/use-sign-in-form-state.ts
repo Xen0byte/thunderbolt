@@ -1,4 +1,5 @@
 import type { AuthClient } from '@/contexts'
+import { DatabaseSingleton } from '@/db/singleton'
 import { setAuthToken } from '@/lib/auth-token'
 import { isValidEmailFormat } from '@/lib/utils'
 import { useReducer, type FormEvent } from 'react'
@@ -72,8 +73,26 @@ type UseSignInFormStateOptions = {
 }
 
 /**
- * State hook for the sign-in form.
- * Separates computation/logic from display for easier testing and reuse.
+ * Sync is disabled by default after sign-in/sign-up; user can enable it in Preferences.
+ * For returning users only: reset pending CRUD operations so that when they later enable
+ * sync, local ops do not conflict with cloud data.
+ */
+const onSignInSuccess = async (isNewUser: boolean): Promise<void> => {
+  if (isNewUser) return
+
+  try {
+    const database = DatabaseSingleton.instance.database
+    if ('clearPendingCrudOperations' in database) {
+      await (database as { clearPendingCrudOperations: () => Promise<void> }).clearPendingCrudOperations()
+    }
+  } catch (error) {
+    console.error('Failed to clear pending CRUD after sign-in:', error)
+  }
+}
+
+/**
+ * State hook for SignInModal
+ * Separates computation/logic from display for easier testing
  */
 export const useSignInFormState = ({
   authClient,
@@ -143,6 +162,9 @@ export const useSignInFormState = ({
       if (result.data?.token) {
         await setAuthToken(result.data.token)
       }
+
+      const isNewUser = (result.data as { isNewUser?: boolean })?.isNewUser ?? false
+      await onSignInSuccess(isNewUser)
 
       // Sign-in successful - show success state
       dispatch({ type: 'VERIFY_SUCCESS' })
