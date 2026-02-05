@@ -1,17 +1,9 @@
 import type { Auth } from '@/auth/elysia-plugin'
 import type { db as DbType } from '@/db/client'
 import { user } from '@/db/auth-schema'
-import {
-  chatMessagesTable,
-  chatThreadsTable,
-  modelsTable,
-  mcpServersTable,
-  promptsTable,
-  settingsTable,
-  tasksTable,
-  triggersTable,
-} from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { devicesTable, POWERSYNC_TABLES_BY_NAME } from '@/db/schema'
+import { POWERSYNC_TABLE_NAMES } from '@shared/powersync-tables'
+import { and, eq } from 'drizzle-orm'
 import { Elysia } from 'elysia'
 
 /**
@@ -36,18 +28,24 @@ export const createAccountRoutes = (auth: Auth, database: typeof DbType) => {
         return { error: 'Unauthorized' }
       }
     })
+    .post('/devices/:id/revoke', async ({ params, set, user: sessionUser }) => {
+      const userId = sessionUser!.id
+      const deviceId = params.id
+      const now = Math.floor(Date.now() / 1000)
+      await database
+        .update(devicesTable)
+        .set({ revokedAt: now })
+        .where(and(eq(devicesTable.id, deviceId), eq(devicesTable.userId, userId)))
+      set.status = 204
+    })
     .delete('/', async ({ set, user: sessionUser }) => {
       const userId = sessionUser!.id
 
       await database.transaction(async (tx) => {
-        await tx.delete(settingsTable).where(eq(settingsTable.userId, userId))
-        await tx.delete(chatMessagesTable).where(eq(chatMessagesTable.userId, userId))
-        await tx.delete(chatThreadsTable).where(eq(chatThreadsTable.userId, userId))
-        await tx.delete(tasksTable).where(eq(tasksTable.userId, userId))
-        await tx.delete(triggersTable).where(eq(triggersTable.userId, userId))
-        await tx.delete(promptsTable).where(eq(promptsTable.userId, userId))
-        await tx.delete(mcpServersTable).where(eq(mcpServersTable.userId, userId))
-        await tx.delete(modelsTable).where(eq(modelsTable.userId, userId))
+        for (const name of POWERSYNC_TABLE_NAMES) {
+          const table = POWERSYNC_TABLES_BY_NAME[name]
+          await tx.delete(table).where(eq(table.userId, userId))
+        }
         await tx.delete(user).where(eq(user.id, userId))
       })
 

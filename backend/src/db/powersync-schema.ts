@@ -1,3 +1,4 @@
+import type { PowerSyncTableName } from '@shared/powersync-tables'
 import { index, integer, pgTable, text } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
@@ -183,3 +184,30 @@ export const modesTable = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
   ],
 )
+
+/** Synced via PowerSync. Device list and revoke access. No token. */
+export const devicesTable = pgTable('devices', {
+  id: text('id').primaryKey(),
+  userId: text('user_id'),
+  name: text('name'),
+  lastSeen: integer('last_seen').default(sql`extract(epoch from now())::integer`),
+  createdAt: integer('created_at').default(sql`extract(epoch from now())::integer`),
+  revokedAt: integer('revoked_at'),
+})
+
+/**
+ * Map of PowerSync table names to Drizzle tables for account delete.
+ * Must have an entry for every PowerSyncTableName (type-checked).
+ */
+export const POWERSYNC_TABLES_BY_NAME = {
+  settings: settingsTable,
+  chat_threads: chatThreadsTable,
+  chat_messages: chatMessagesTable,
+  tasks: tasksTable,
+  models: modelsTable,
+  mcp_servers: mcpServersTable,
+  prompts: promptsTable,
+  triggers: triggersTable,
+  modes: modesTable,
+  devices: devicesTable,
+} satisfies Record<PowerSyncTableName, unknown>

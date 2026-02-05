@@ -14,6 +14,7 @@ import ChatLayout from '@/layout/main-layout'
 import { PostHogProvider } from '@/lib/posthog'
 import { ThemeProvider } from '@/lib/theme-provider'
 import DevSettingsPage from '@/settings/dev-settings'
+import DevicesSettingsPage from '@/settings/devices'
 import { default as Settings } from '@/settings/index'
 import IntegrationsPage from '@/settings/integrations'
 import McpServersPage from '@/settings/mcp-servers'
@@ -31,7 +32,6 @@ import { UpdateNotification } from './components/update-notification'
 import { ContentViewProvider } from './content-view/context'
 import MessageSimulatorPage from './devtools/message-simulator'
 import { useAppInitialization } from './hooks/use-app-initialization'
-import { usePowerSyncInvalidation } from './hooks/use-powersync-invalidation'
 import { useSafeAreaInset } from './hooks/use-safe-area-inset'
 import Layout from './layout'
 import { MCPProvider } from './lib/mcp-provider'
@@ -48,7 +48,6 @@ function AppContent({ initData }: { initData: InitData }) {
   useTriggerScheduler()
   useKeyboardInset()
   useSafeAreaInset()
-  usePowerSyncInvalidation() // Watch all tables for changes and invalidate React Query cache
 
   return (
     <BrowserRouter>
@@ -109,6 +108,7 @@ function AppRoutes({ initData }: { initData: InitData }) {
             <Route index element={<Settings />} />
             <Route path="preferences" element={<PreferencesSettingsPage />} />
             <Route path="models" element={<ModelsPage />} />
+            <Route path="devices" element={<DevicesSettingsPage />} />
             <Route path="mcp-servers" element={<McpServersPage />} />
             <Route path="integrations" element={<IntegrationsPage />} />
             <Route path="dev-settings" element={<DevSettingsPage />} />
