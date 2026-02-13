@@ -119,7 +119,7 @@ describe('Inference Routes', () => {
     it('should route gpt-oss-120b model to thunderbolt provider', async () => {
       getInferenceClientSpy.mockReturnValue({
         client: mockOpenAIClient as unknown as OpenAI,
-        provider: 'thunderbolt',
+        provider: 'tinfoil',
       })
 
       const mockCompletion = createMockStream()
@@ -139,10 +139,10 @@ describe('Inference Routes', () => {
       )
 
       expect(response.status).toBe(200)
-      expect(getInferenceClientSpy).toHaveBeenCalledWith('thunderbolt')
+      expect(getInferenceClientSpy).toHaveBeenCalledWith('tinfoil')
       expect(mockCreateCompletion).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'openai/gpt-oss-120b',
+          model: 'gpt-oss-120b',
         }),
       )
     })
@@ -228,7 +228,7 @@ describe('Inference Routes', () => {
       isPostHogConfiguredSpy.mockReturnValue(true)
       getInferenceClientSpy.mockReturnValue({
         client: mockOpenAIClient as unknown as OpenAI,
-        provider: 'thunderbolt',
+        provider: 'tinfoil',
       })
 
       const mockCompletion = createMockStream()
@@ -251,7 +251,7 @@ describe('Inference Routes', () => {
       expect(mockCreateCompletion).toHaveBeenCalledWith(
         expect.objectContaining({
           posthogProperties: expect.objectContaining({
-            model_provider: 'thunderbolt',
+            model_provider: 'tinfoil',
           }),
         }),
       )
