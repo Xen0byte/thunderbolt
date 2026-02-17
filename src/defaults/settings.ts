@@ -17,7 +17,6 @@ export const hashSetting = (setting: Setting): string => {
  *
  * Note: Some settings are intentionally not included here because they're user-specific:
  * - anonymous_id: Generated uniquely per user
- * - selected_model: User's model selection
  * - preferred_name, location_*: User preferences
  * - integrations_*: User's integration credentials and settings
  */
@@ -162,6 +161,13 @@ export const defaultSettingIntegrationsDoNotAskAgain: Setting = {
   defaultHash: null,
 }
 
+export const defaultSettingSelectedModel: Setting = {
+  key: 'selected_model',
+  value: 'd045a4c0-3f93-4f30-a608-24e07856e11d', // GPT OSS (gpt-oss-120b)
+  updatedAt: null,
+  defaultHash: null,
+}
+
 /**
  * Array of all default settings for iteration
  */
@@ -186,4 +192,5 @@ export const defaultSettings: ReadonlyArray<Setting> = [
   defaultSettingUserHasCompletedOnboarding,
   defaultSettingContentViewWidth,
   defaultSettingIntegrationsDoNotAskAgain,
+  defaultSettingSelectedModel,
 ] as const

@@ -116,14 +116,26 @@ describe('Inference Routes', () => {
       expect(createSSEStreamSpy).toHaveBeenCalledWith(mockCompletion, validRequestBody.model)
     })
 
-    it('should route gpt-oss-120b model to thunderbolt provider', async () => {
-      getInferenceClientSpy.mockReturnValue({
-        client: mockOpenAIClient as unknown as OpenAI,
-        provider: 'tinfoil',
-      })
+    it('should route gpt-oss-120b model to tinfoil provider with EHBP passthrough', async () => {
+      // Mock fetch for Tinfoil's direct fetch call
+      const mockFetchResponse = new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('data: {"test": "chunk"}\n\n'))
+            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+            controller.close()
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Ehbp-Response-Nonce': 'test-nonce-123',
+          },
+        },
+      )
 
-      const mockCompletion = createMockStream()
-      mockCreateCompletion.mockImplementation(() => Promise.resolve(mockCompletion))
+      const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(mockFetchResponse)
 
       const gptOssRequest = {
         ...validRequestBody,
@@ -133,18 +145,31 @@ describe('Inference Routes', () => {
       const response = await app.handle(
         new Request('http://localhost/chat/completions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Ehbp-Encapsulated-Key': 'test-key-456',
+            'X-Tinfoil-Enclave-Url': 'https://inference.tinfoil.sh',
+          },
           body: JSON.stringify(gptOssRequest),
         }),
       )
 
       expect(response.status).toBe(200)
-      expect(getInferenceClientSpy).toHaveBeenCalledWith('tinfoil')
-      expect(mockCreateCompletion).toHaveBeenCalledWith(
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://inference.tinfoil.sh/v1/chat/completions',
         expect.objectContaining({
-          model: 'gpt-oss-120b',
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: expect.stringContaining('Bearer'),
+            'Ehbp-Encapsulated-Key': 'test-key-456',
+          }),
         }),
       )
+
+      // Verify EHBP response headers are forwarded
+      expect(response.headers.get('Ehbp-Response-Nonce')).toBe('test-nonce-123')
+
+      fetchSpy.mockRestore()
     })
 
     it('should route mistral models to mistral provider', async () => {
@@ -224,41 +249,8 @@ describe('Inference Routes', () => {
       isPostHogConfiguredSpy.mockReturnValue(false)
     })
 
-    it('should include correct provider in PostHog properties for gpt-oss-120b', async () => {
-      isPostHogConfiguredSpy.mockReturnValue(true)
-      getInferenceClientSpy.mockReturnValue({
-        client: mockOpenAIClient as unknown as OpenAI,
-        provider: 'tinfoil',
-      })
-
-      const mockCompletion = createMockStream()
-      mockCreateCompletion.mockImplementation(() => Promise.resolve(mockCompletion))
-
-      const gptOssRequest = {
-        ...validRequestBody,
-        model: 'gpt-oss-120b',
-      }
-
-      const response = await app.handle(
-        new Request('http://localhost/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(gptOssRequest),
-        }),
-      )
-
-      expect(response.status).toBe(200)
-      expect(mockCreateCompletion).toHaveBeenCalledWith(
-        expect.objectContaining({
-          posthogProperties: expect.objectContaining({
-            model_provider: 'tinfoil',
-          }),
-        }),
-      )
-
-      // Reset for other tests
-      isPostHogConfiguredSpy.mockReturnValue(false)
-    })
+    // Note: Tinfoil uses direct fetch passthrough for EHBP encryption,
+    // bypassing the OpenAI SDK and PostHog instrumentation layer
 
     it('should reject non-streaming requests', async () => {
       const nonStreamingRequest = {

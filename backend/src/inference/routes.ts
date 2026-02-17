@@ -39,6 +39,71 @@ export const createInferenceRoutes = () => {
   })
     .onError(safeErrorHandler)
     .post('/completions', async (ctx) => {
+      // EHBP passthrough: Forward encrypted requests directly to Tinfoil enclave
+      const isEhbpEncrypted =
+        ctx.request.headers.get('ehbp-encapsulated-key') || ctx.request.headers.get('x-tinfoil-enclave-url')
+
+      if (isEhbpEncrypted) {
+        const { getSettings } = await import('@/config/settings')
+        const settings = getSettings()
+
+        if (!settings.tinfoilApiKey) {
+          throw new Error('Tinfoil API key not configured')
+        }
+
+        const enclaveBaseUrl = ctx.request.headers.get('x-tinfoil-enclave-url')
+        if (!enclaveBaseUrl) {
+          throw new Error('X-Tinfoil-Enclave-Url header missing')
+        }
+
+        const upstreamUrl = `${enclaveBaseUrl}/v1/chat/completions`
+        const ehbpKey = ctx.request.headers.get('ehbp-encapsulated-key')
+
+        console.info(`[EHBP] Proxying encrypted request to ${upstreamUrl}`)
+
+        let response: Response
+        try {
+          response = await fetch(upstreamUrl, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${settings.tinfoilApiKey}`,
+              'Content-Type': 'application/json',
+              Accept: ctx.request.headers.get('accept') || 'application/json',
+              ...(ehbpKey && { 'Ehbp-Encapsulated-Key': ehbpKey }),
+            },
+            body: ctx.request.body,
+            duplex: 'half' as any,
+          } as RequestInit)
+        } catch (error) {
+          console.error('[EHBP] Proxy request failed:', error)
+          throw new Error(`Failed to proxy request to Tinfoil: ${error}`)
+        }
+
+        const ehbpResponseNonce = response.headers.get('ehbp-response-nonce')
+        if (!ehbpResponseNonce) {
+          console.warn('[EHBP] Missing Ehbp-Response-Nonce in response')
+        }
+
+        const responseHeaders = new Headers({
+          'Content-Type': response.headers.get('Content-Type') || 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          'Access-Control-Allow-Origin': ctx.request.headers.get('origin') || '*',
+          'Access-Control-Allow-Credentials': 'true',
+          'Access-Control-Expose-Headers': 'Ehbp-Response-Nonce',
+        })
+
+        if (ehbpResponseNonce) {
+          responseHeaders.set('Ehbp-Response-Nonce', ehbpResponseNonce)
+        }
+
+        return new Response(response.body, {
+          status: response.status,
+          headers: responseHeaders,
+        })
+      }
+
+      // Standard flow: Parse JSON body for non-encrypted requests
       const body = await ctx.request.json()
 
       if (!body.stream) {
@@ -52,6 +117,12 @@ export const createInferenceRoutes = () => {
 
       const { provider, internalName } = modelConfig
 
+      // Tinfoil requests should always use EHBP (handled above)
+      if (provider === 'tinfoil') {
+        throw new Error('Tinfoil requests must use EHBP encryption')
+      }
+
+      // Standard flow for other providers
       const { client } = getInferenceClient(provider)
 
       console.info(`Routing model "${body.model}" to ${provider} provider`)

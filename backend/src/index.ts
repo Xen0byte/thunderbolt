@@ -1,5 +1,3 @@
-import 'dotenv/config'
-
 import { createMainRoutes } from '@/api/routes'
 import { createBetterAuthPlugin } from '@/auth/elysia-plugin'
 import { createGoogleAuthRoutes } from '@/auth/google'
@@ -16,7 +14,6 @@ import { createWaitlistRoutes } from '@/waitlist/routes'
 import type { AppDeps } from '@/types'
 import { cors } from '@elysiajs/cors'
 import { Elysia } from 'elysia'
-import { node } from '@elysiajs/node'
 
 /**
  * Create the main Elysia application
@@ -33,12 +30,8 @@ export const createApp = async (deps?: AppDeps) => {
     database = db
   }
 
-  // Auto-detect runtime and use appropriate adapter
-  const isBun = typeof Bun !== 'undefined'
-
   const app = new Elysia({
     prefix: '/v1',
-    ...(isBun ? {} : { adapter: node() }), // Only use Node adapter when on Node.js
   })
 
   if (process.env.NODE_ENV !== 'production') {
@@ -80,6 +73,24 @@ export const createApp = async (deps?: AppDeps) => {
       .use(betterAuthPlugin)
       // Waitlist auth middleware - enforces auth on protected routes when WAITLIST_ENABLED=true
       .use(createWaitlistAuthMiddleware(settings, auth))
+      // Tinfoil EHBP attestation endpoint
+      .get('/attestation', async () => {
+        try {
+          const response = await fetch('https://atc.tinfoil.sh/attestation')
+          const data = await response.json()
+
+          return new Response(JSON.stringify(data), {
+            status: response.status,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'public, max-age=300',
+            },
+          })
+        } catch (error) {
+          console.error('Tinfoil attestation fetch failed:', error)
+          throw new Error('Failed to fetch Tinfoil attestation bundle')
+        }
+      })
       // Mount route groups
       .use(createMainRoutes(fetchFn))
       .use(createGoogleAuthRoutes(fetchFn))

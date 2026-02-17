@@ -43,9 +43,9 @@ const settingsSchema = z.object({
   corsAllowHeaders: z
     .string()
     .default(
-      'Content-Type,Authorization,Accept,Accept-Encoding,Accept-Language,Cache-Control,User-Agent,X-Requested-With,X-Client-Platform',
+      'Content-Type,Authorization,Accept,Accept-Encoding,Accept-Language,Cache-Control,User-Agent,X-Requested-With,X-Client-Platform,Ehbp-Encapsulated-Key,X-Tinfoil-Enclave-Url',
     ),
-  corsExposeHeaders: z.string().default('mcp-session-id'),
+  corsExposeHeaders: z.string().default('mcp-session-id,Ehbp-Response-Nonce'),
 })
 
 export type Settings = z.infer<typeof settingsSchema>
@@ -80,8 +80,8 @@ const parseSettings = (): Settings => {
     corsAllowMethods: process.env.CORS_ALLOW_METHODS || 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
     corsAllowHeaders:
       process.env.CORS_ALLOW_HEADERS ||
-      'Content-Type,Authorization,Accept,Accept-Encoding,Accept-Language,Cache-Control,User-Agent,X-Requested-With,X-Client-Platform',
-    corsExposeHeaders: process.env.CORS_EXPOSE_HEADERS || 'mcp-session-id',
+      'Content-Type,Authorization,Accept,Accept-Encoding,Accept-Language,Cache-Control,User-Agent,X-Requested-With,X-Client-Platform,Ehbp-Encapsulated-Key,X-Tinfoil-Enclave-Url',
+    corsExposeHeaders: process.env.CORS_EXPOSE_HEADERS || 'mcp-session-id,Ehbp-Response-Nonce',
   }
 
   return settingsSchema.parse(env)
