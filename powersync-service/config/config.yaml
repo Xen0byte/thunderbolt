@@ -16,16 +16,16 @@ sync_rules:
       user_data:
         parameters: SELECT request.user_id() as user_id
         data:
-          - SELECT * FROM settings WHERE settings.user_id = bucket.user_id
-          - SELECT * FROM chat_threads WHERE chat_threads.user_id = bucket.user_id
-          - SELECT * FROM chat_messages WHERE chat_messages.user_id = bucket.user_id
-          - SELECT * FROM tasks WHERE tasks.user_id = bucket.user_id
-          - SELECT * FROM models WHERE models.user_id = bucket.user_id
-          - SELECT * FROM mcp_servers WHERE mcp_servers.user_id = bucket.user_id
-          - SELECT * FROM prompts WHERE prompts.user_id = bucket.user_id
-          - SELECT * FROM triggers WHERE triggers.user_id = bucket.user_id
-          - SELECT * FROM modes WHERE modes.user_id = bucket.user_id
-          - SELECT * FROM devices WHERE devices.user_id = bucket.user_id
+          - SELECT * FROM powersync.settings WHERE user_id = bucket.user_id
+          - SELECT * FROM powersync.chat_threads WHERE user_id = bucket.user_id
+          - SELECT * FROM powersync.chat_messages WHERE user_id = bucket.user_id
+          - SELECT * FROM powersync.tasks WHERE user_id = bucket.user_id
+          - SELECT * FROM powersync.models WHERE user_id = bucket.user_id
+          - SELECT * FROM powersync.mcp_servers WHERE user_id = bucket.user_id
+          - SELECT * FROM powersync.prompts WHERE user_id = bucket.user_id
+          - SELECT * FROM powersync.triggers WHERE user_id = bucket.user_id
+          - SELECT * FROM powersync.modes WHERE user_id = bucket.user_id
+          - SELECT * FROM powersync.devices WHERE user_id = bucket.user_id
 
 client_auth:
   supabase: false
