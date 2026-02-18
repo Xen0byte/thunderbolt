@@ -64,12 +64,28 @@ export const shouldRetry = (
   maxAttempts: number,
 ): boolean => totalText.trim().length === 0 && hadToolCalls && attemptNumber < maxAttempts
 
+/** Keys for agentic loop nudge messages */
+type NudgeKey = 'finalStep' | 'preventive' | 'retry'
+
+/** Shape for a complete set of nudge messages — adding a new key requires all sets to update */
+export type NudgeMessages = Readonly<Record<NudgeKey, string>>
+
 /** Nudge messages used during the agentic loop */
-export const nudgeMessages = {
+export const nudgeMessages: NudgeMessages = {
+  finalStep: 'RESPOND NOW with the information gathered. Do not ask questions.',
+  preventive: 'Synthesize your tool results and respond now.',
+  retry: 'Respond now with the information gathered. No more tools.',
+}
+
+/** Mode-specific nudge overrides */
+export const searchModeNudges: NudgeMessages = {
   finalStep:
-    'RESPOND NOW. Provide your answer using the information you have gathered. Do not ask questions—give your best response immediately.',
+    'RESPOND NOW with link preview widgets. Each URL must be unique and point to a specific page (not a homepage). Use <widget:link-preview> tags.',
   preventive:
-    'You have gathered information from multiple tool calls. Please synthesize the results and provide your response to the user now.',
-  retry:
-    'You called tools but did not provide a response. Please synthesize all the information you gathered and respond to me now. Do not call any more tools.',
-} as const
+    'You have enough results. Before responding, verify: no duplicate URLs and no homepage URLs. Then respond with <widget:link-preview> widgets.',
+  retry: 'Respond now with <widget:link-preview> widgets. Each must have a unique, specific-page URL. No more tools.',
+}
+
+/** Get the appropriate nudge messages for a mode */
+export const getNudgeMessages = (modeName?: string): NudgeMessages =>
+  modeName === 'search' ? searchModeNudges : nudgeMessages

@@ -632,4 +632,173 @@ describe('parseContentParts', () => {
       expect(result3).toEqual([{ type: 'text', content: 'Some text' }])
     })
   })
+
+  describe('single-quoted attributes', () => {
+    it('parses citation with single-quoted JSON sources', () => {
+      const json = '[{"id":"1","title":"Test","url":"https://example.com","siteName":"Example"}]'
+      const text = `Some fact. <widget:citation sources='${json}' />`
+      const result = parseContentParts(text)
+
+      expect(result).toHaveLength(2)
+      expect(result[0]).toEqual({ type: 'text', content: 'Some fact.' })
+      expect(result[1]).toEqual({
+        type: 'widget',
+        widget: { widget: 'citation', args: { sources: json } },
+      })
+    })
+
+    it('parses link preview with double-quoted attributes alongside citation with single-quoted', () => {
+      const json = '[{"id":"1","title":"Test","url":"https://a.com"}]'
+      const text = `Link: <widget:link-preview url="https://b.com" /> Fact. <widget:citation sources='${json}' />`
+      const result = parseContentParts(text)
+
+      expect(result).toHaveLength(4)
+      expect(result[0]).toEqual({ type: 'text', content: 'Link:' })
+      expect((result[1] as { type: 'widget'; widget: { widget: string } }).widget.widget).toBe('link-preview')
+      expect(result[2]).toEqual({ type: 'text', content: 'Fact.' })
+      expect((result[3] as { type: 'widget'; widget: { widget: string } }).widget.widget).toBe('citation')
+    })
+
+    it("handles apostrophe in JSON title (NASA's Mission)", () => {
+      const json = `[{"id":"1","title":"NASA's Mission","url":"https://nasa.gov","siteName":"NASA"}]`
+      const text = `Space exploration advances. <widget:citation sources='${json}' />`
+      const result = parseContentParts(text)
+
+      expect(result).toHaveLength(2)
+      expect(result[1]).toEqual({
+        type: 'widget',
+        widget: { widget: 'citation', args: { sources: json } },
+      })
+    })
+
+    it("handles multiple apostrophes in JSON (Rock 'n' Roll)", () => {
+      const json = `[{"id":"1","title":"Rock 'n' Roll History","url":"https://music.com","siteName":"Music DB"}]`
+      const text = `Music evolved. <widget:citation sources='${json}' />`
+      const result = parseContentParts(text)
+
+      expect(result).toHaveLength(2)
+      expect(result[1]).toEqual({
+        type: 'widget',
+        widget: { widget: 'citation', args: { sources: json } },
+      })
+    })
+
+    it("handles apostrophe in siteName (McDonald's)", () => {
+      const json = `[{"id":"1","title":"Earnings Report","url":"https://mcdonalds.com","siteName":"McDonald's"}]`
+      const text = `Revenue grew. <widget:citation sources='${json}' />`
+      const result = parseContentParts(text)
+
+      expect(result).toHaveLength(2)
+      expect(result[1]).toEqual({
+        type: 'widget',
+        widget: { widget: 'citation', args: { sources: json } },
+      })
+    })
+  })
+
+  describe('single-quoted attributes security', () => {
+    it('rejects attribute with excess closing brackets (negative depth attack)', () => {
+      const json = `}}}}{"injected":"xss"}`
+      const text = `Fact. <widget:citation sources='${json}' />`
+      const result = parseContentParts(text)
+
+      expect(result).toHaveLength(1)
+      expect(result[0]).toEqual({ type: 'text', content: 'Fact.' })
+    })
+
+    it('rejects attribute with unmatched opening brackets', () => {
+      const json = `[[[{"id":"1"}`
+      const text = `Fact. <widget:citation sources='${json}' />`
+      const result = parseContentParts(text)
+
+      expect(result).toHaveLength(1)
+      expect(result[0]).toEqual({ type: 'text', content: 'Fact.' })
+    })
+
+    it('rejects attribute with mismatched brackets (more closes than opens)', () => {
+      const json = `}{"id":"1","title":"Test","url":"https://example.com"}`
+      const text = `Info. <widget:citation sources='${json}' />`
+      const result = parseContentParts(text)
+
+      expect(result).toHaveLength(1)
+      expect(result[0]).toEqual({ type: 'text', content: 'Info.' })
+    })
+
+    it('accepts valid JSON with balanced brackets in single quotes', () => {
+      const json = `[{"id":"1","title":"Test","url":"https://example.com"}]`
+      const text = `Fact. <widget:citation sources='${json}' />`
+      const result = parseContentParts(text)
+
+      expect(result).toHaveLength(2)
+      expect(result[0]).toEqual({ type: 'text', content: 'Fact.' })
+      expect(result[1]).toEqual({
+        type: 'widget',
+        widget: { widget: 'citation', args: { sources: json } },
+      })
+    })
+
+    it('rejects empty JSON array in single quotes', () => {
+      const json = `[]`
+      const text = `Data. <widget:citation sources='${json}' />`
+      const result = parseContentParts(text)
+
+      // Empty arrays are invalid (at least one source required)
+      expect(result).toHaveLength(1)
+      expect(result[0]).toEqual({ type: 'text', content: 'Data.' })
+    })
+  })
+
+  describe('bracket citation stripping', () => {
+    it('strips OpenAI-style bracket citations', () => {
+      const text = 'The AI Act was passed【2†title】.'
+      const result = parseContentParts(text)
+
+      expect(result).toEqual([{ type: 'text', content: 'The AI Act was passed.' }])
+    })
+
+    it('strips multiple bracket citations', () => {
+      const text = 'First fact【1†source】 and second fact【3†source】.'
+      const result = parseContentParts(text)
+
+      expect(result).toEqual([{ type: 'text', content: 'First fact and second fact.' }])
+    })
+
+    it('strips bracket citations alongside valid widget citations', () => {
+      const json = '[{"id":"1","title":"Test","url":"https://example.com"}]'
+      const text = `AI regulation passed【2†title】 today. <widget:citation sources='${json}' />`
+      const result = parseContentParts(text)
+
+      expect(result).toHaveLength(2)
+      expect(result[0]).toEqual({ type: 'text', content: 'AI regulation passed today.' })
+      expect(result[1].type).toBe('widget')
+    })
+
+    it('strips numbered bracket citations', () => {
+      const text = 'Fact【12】 and another【3】.'
+      const result = parseContentParts(text)
+
+      expect(result).toEqual([{ type: 'text', content: 'Fact and another.' }])
+    })
+
+    it('strips bracket with dagger and title', () => {
+      const text = 'The EU passed the AI Act【6†title】.'
+      const result = parseContentParts(text)
+
+      expect(result).toEqual([{ type: 'text', content: 'The EU passed the AI Act.' }])
+    })
+
+    it('preserves legitimate CJK brackets', () => {
+      const text = '価格は【税込み】です'
+      const result = parseContentParts(text)
+
+      expect(result).toEqual([{ type: 'text', content: '価格は【税込み】です' }])
+    })
+
+    it('preserves text when no bracket citations present', () => {
+      const text = 'Normal text without any brackets.'
+      const result = parseContentParts(text)
+
+      expect(result).toEqual([{ type: 'text', content: 'Normal text without any brackets.' }])
+    })
+  })
 })

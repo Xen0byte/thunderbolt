@@ -1,9 +1,9 @@
 import { createPrompt } from '@/ai/prompt'
 import {
   extractTextFromMessages,
+  getNudgeMessages,
   hasToolCalls,
   isFinalStep,
-  nudgeMessages,
   shouldRetry,
   shouldShowPreventiveNudge,
 } from '@/ai/step-logic'
@@ -11,6 +11,7 @@ import { getModel, getSettings } from '@/dal'
 import { fetch } from '@/lib/fetch'
 import { createToolset, getAvailableTools } from '@/lib/tools'
 import type { Model, SaveMessagesFunction, ThunderboltUIMessage } from '@/types'
+import type { SourceMetadata } from '@/types/source'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
@@ -78,13 +79,16 @@ export const createModel = async (modelConfig: Model) => {
         return tinfoil('gpt-oss-120b')
       }
 
+      // GPT OSS (vendor: 'openai') uses createOpenAI with .chat() to force Chat Completions API
+      // (AI SDK 5 defaults createOpenAI to Responses API which our backend doesn't support)
+      if (modelConfig.vendor === 'openai') {
+        const provider = createOpenAI({ baseURL: cloudUrl, apiKey: 'thunderbolt', fetch })
+        return provider.chat(modelConfig.model)
+      }
+
       // Other models use standard OpenAI-compatible endpoint
-      const openaiCompatible = createOpenAICompatible({
-        name: 'thunderbolt',
-        baseURL: cloudUrl,
-        fetch,
-      })
-      return openaiCompatible(modelConfig.model)
+      const provider = createOpenAICompatible({ name: 'thunderbolt', baseURL: cloudUrl, fetch })
+      return provider(modelConfig.model)
     }
     case 'anthropic': {
       const anthropic = createAnthropic({
@@ -170,11 +174,13 @@ export const aiFetchStreamingResponse = async ({
 
   const supportsTools = model.toolUsage !== 0
 
+  const sourceCollector: SourceMetadata[] = []
+
   let toolset: Record<string, Tool> = {}
   if (supportsTools) {
     // Use provided httpClient for tests, otherwise use plain ky for external APIs
     const toolsHttpClient = httpClient || ky
-    const availableTools = await getAvailableTools(toolsHttpClient)
+    const availableTools = await getAvailableTools(toolsHttpClient, sourceCollector)
     toolset = { ...createToolset(availableTools) }
 
     for (const mcpClient of mcpClients || []) {
@@ -223,6 +229,8 @@ export const aiFetchStreamingResponse = async ({
     modeSystemPrompt,
   })
 
+  const activeNudges = getNudgeMessages(modeSystemPrompt?.includes('SEARCH MODE') ? 'search' : undefined)
+
   try {
     const baseModel = await createModel(model)
 
@@ -245,8 +253,11 @@ export const aiFetchStreamingResponse = async ({
     // backend recognizes vendor-specific options. Falls back to provider for user-created models.
     // See: https://github.com/vllm-project/vllm/issues/9019
     const providerOptionsKey = model.vendor ?? model.provider
-    const providerOptions =
-      model.supportsParallelToolCalls === 0 ? { [providerOptionsKey]: { parallelToolCalls: false } } : undefined
+    const rawOptions = {
+      ...(model.supportsParallelToolCalls === 0 && { parallelToolCalls: false }),
+      ...(model.vendor === 'openai' && { systemMessageMode: 'developer' as const }),
+    }
+    const providerOptions = Object.keys(rawOptions).length > 0 ? { [providerOptionsKey]: rawOptions } : undefined
 
     /**
      * Run a single streamText attempt and return the result along with metadata
@@ -267,14 +278,14 @@ export const aiFetchStreamingResponse = async ({
             console.info(`Final step ${stepNumber} - telling model to wrap it up...`)
             return {
               activeTools: [],
-              messages: [...stepMessages, { role: 'user' as const, content: nudgeMessages.finalStep }],
+              messages: [...stepMessages, { role: 'user' as const, content: activeNudges.finalStep }],
             }
           }
 
           // Nudge after many tool calls (but not on final step)
           if (shouldShowPreventiveNudge(steps)) {
             return {
-              messages: [...stepMessages, { role: 'user' as const, content: nudgeMessages.preventive }],
+              messages: [...stepMessages, { role: 'user' as const, content: activeNudges.preventive }],
             }
           }
         },
@@ -340,7 +351,7 @@ export const aiFetchStreamingResponse = async ({
 
         while (attemptNumber <= maxAttempts) {
           const result = runStreamText(currentMessages)
-          const messageMetadata = createMessageMetadata(modelId)
+          const messageMetadata = createMessageMetadata(modelId, sourceCollector)
 
           // If this is not the last possible attempt, we need to check for empty response
           if (attemptNumber < maxAttempts) {
@@ -370,7 +381,7 @@ export const aiFetchStreamingResponse = async ({
               currentMessages = [
                 ...currentMessages,
                 ...response.messages,
-                { role: 'user' as const, content: nudgeMessages.retry },
+                { role: 'user' as const, content: activeNudges.retry },
               ]
 
               isRetry = true

@@ -3,11 +3,19 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useMessageCache } from '@/hooks/use-message-cache'
 import { useSettings } from '@/hooks/use-settings'
 import { fetchLinkPreview } from '@/integrations/thunderbolt-pro/api'
+import type { SourceMetadata } from '@/types/source'
 import { LinkPreview } from './display'
 
 type LinkPreviewWidgetProps = {
   url: string
+  source?: string
+  sources?: SourceMetadata[]
   messageId: string
+  fetchPreviewFn?: (params: { url: string }) => Promise<{
+    title: string
+    description: string
+    image: string | null
+  }>
 }
 
 type LinkPreviewMetadata = {
@@ -30,15 +38,58 @@ export const LinkPreviewSkeleton = () => {
   )
 }
 
-export const LinkPreviewWidget = ({ url, messageId }: LinkPreviewWidgetProps) => {
+/** Renders a link preview instantly from source registry metadata */
+const InstantLinkPreview = ({ sourceData, cloudUrl }: { sourceData: SourceMetadata; cloudUrl: string | null }) => {
+  const imageUrl = sourceData.image && cloudUrl ? `${cloudUrl}/pro/proxy/${encodeURIComponent(sourceData.image)}` : null
+
+  return (
+    <LinkPreview
+      title={sourceData.title}
+      description={sourceData.description ?? ''}
+      url={sourceData.url}
+      image={imageUrl}
+    />
+  )
+}
+
+export const LinkPreviewWidget = ({ url, source, sources, messageId, fetchPreviewFn }: LinkPreviewWidgetProps) => {
   const { cloudUrl } = useSettings({ cloud_url: 'http://localhost:8000/v1' })
 
-  // Use message cache hook - it handles checking cache and fetching if needed
+  // Instant render path: resolve from source registry (O(1) index lookup)
+  if (source && sources) {
+    const sourceIndex = parseInt(source, 10)
+    const sourceData = sources[sourceIndex - 1]
+    if (sourceData && sourceData.title) {
+      return <InstantLinkPreview sourceData={sourceData} cloudUrl={cloudUrl.value} />
+    }
+  }
+
+  // Fallback: existing fetch-based path
+  return <FetchLinkPreview url={url} messageId={messageId} cloudUrl={cloudUrl.value} fetchPreviewFn={fetchPreviewFn} />
+}
+
+/** Fallback component that fetches link preview data via the message cache */
+const FetchLinkPreview = ({
+  url,
+  messageId,
+  cloudUrl,
+  fetchPreviewFn,
+}: {
+  url: string
+  messageId: string
+  cloudUrl: string | null
+  fetchPreviewFn?: (params: { url: string }) => Promise<{
+    title: string
+    description: string
+    image: string | null
+  }>
+}) => {
+  const fetchFn = fetchPreviewFn ?? fetchLinkPreview
   const { data, isLoading, error } = useMessageCache<LinkPreviewMetadata>({
     messageId,
     cacheKey: ['linkPreview', url],
     fetchFn: async () => {
-      const preview = await fetchLinkPreview({ url })
+      const preview = await fetchFn({ url })
       return {
         title: preview.title || url,
         description: preview.description || '',
@@ -51,7 +102,6 @@ export const LinkPreviewWidget = ({ url, messageId }: LinkPreviewWidgetProps) =>
     return <LinkPreviewSkeleton />
   }
 
-  // Show error state with error message as description
   if (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to load preview'
     return <LinkPreview title={url} description={errorMessage} url={url} image={null} />
@@ -61,7 +111,7 @@ export const LinkPreviewWidget = ({ url, messageId }: LinkPreviewWidgetProps) =>
     return <LinkPreview title={url} description="Failed to load preview" url={url} image={null} />
   }
 
-  const imageUrl = data.image && cloudUrl.value ? `${cloudUrl.value}/pro/proxy/${encodeURIComponent(data.image)}` : null
+  const imageUrl = data.image && cloudUrl ? `${cloudUrl}/pro/proxy/${encodeURIComponent(data.image)}` : null
 
   return <LinkPreview title={data.title} description={data.description} url={url} image={imageUrl} />
 }
