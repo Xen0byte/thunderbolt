@@ -92,7 +92,9 @@ export const createApp = async (deps?: AppDeps) => {
         try {
           const response = await fetch('https://atc.tinfoil.sh/attestation', {
             // Add timeout to prevent hanging
-            signal: AbortSignal.timeout(10000), // 10 second timeout
+const ATTESTATION_TIMEOUT_MS = 10_000 // 10 seconds
+
+signal: AbortSignal.timeout(ATTESTATION_TIMEOUT_MS),
           })
 
           if (!response.ok) {
