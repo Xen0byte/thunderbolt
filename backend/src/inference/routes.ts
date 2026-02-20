@@ -1,4 +1,5 @@
 import { safeErrorHandler } from '@/middleware/error-handling'
+import { isPostHogConfigured } from '@/posthog/client'
 import { createSSEStreamFromCompletion } from '@/utils/streaming'
 import type { OpenAI as PostHogOpenAI } from '@posthog/ai'
 import { Elysia } from 'elysia'
@@ -269,12 +270,11 @@ export const createInferenceRoutes = () => {
               endpoint: '/chat/completions',
               has_tools: !!body.tools,
               temperature: body.temperature,
-              // @todo add distinct id and trace id
             },
           }),
         })
 
-        const stream = createSSEStreamFromCompletion(completion, body.model)
+        const stream = createSSEStreamFromCompletion(completion as any, body.model)
 
         return new Response(stream, {
           headers: {
