@@ -38,7 +38,18 @@ const settingsSchema = z.object({
   corsOrigins: z.string().default('http://localhost:1420'),
   corsOriginRegex: z
     .string()
-    .default('^(tauri://localhost|http://tauri\\.localhost|http://localhost:\\d+|null|file://.*)$'),
+    .default('^(tauri://localhost|http://tauri\\.localhost|http://localhost:\\d+|null|file://.*)$')
+    .refine(
+      (s) => {
+        try {
+          new RegExp(s)
+          return true
+        } catch {
+          return false
+        }
+      },
+      { message: 'CORS_ORIGIN_REGEX must be a valid regular expression' },
+    ),
   corsAllowCredentials: z.boolean().default(true),
   corsAllowMethods: z.string().default('GET,POST,PUT,DELETE,PATCH,OPTIONS'),
   corsAllowHeaders: z

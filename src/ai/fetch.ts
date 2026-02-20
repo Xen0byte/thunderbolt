@@ -72,10 +72,15 @@ export const createModel = async (modelConfig: Model) => {
         // Add timeout to prevent indefinite hang if attestation service is unavailable
         const ATTESTATION_TIMEOUT_MS = 10_000 // 10 seconds
         const readyPromise = secureClient.ready()
+        let timeoutId: ReturnType<typeof setTimeout> | undefined
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Attestation bundle fetch timeout')), ATTESTATION_TIMEOUT_MS)
+          timeoutId = setTimeout(() => reject(new Error('Attestation bundle fetch timeout')), ATTESTATION_TIMEOUT_MS)
         })
-        await Promise.race([readyPromise, timeoutPromise])
+        try {
+          await Promise.race([readyPromise, timeoutPromise])
+        } finally {
+          if (timeoutId !== undefined) clearTimeout(timeoutId)
+        }
 
         // Wrap secureClient.fetch to add X-Requested-Model header for backend validation
         // The body is encrypted, so backend needs this unencrypted header to validate the model
