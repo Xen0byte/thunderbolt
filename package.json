@@ -12,6 +12,7 @@
     "test:backend": "cd backend && bun test --timeout 5000 --randomize",
     "test:backend:5x": "cd backend && bun test --timeout 5000 --randomize --rerun-each 5",
     "test:backend:watch": "cd backend && bun test --watch",
+    "copy-powersync-assets": "powersync-web copy-assets --output public",
     "start": "vite",
     "dev": "vite",
     "build": "vite build",
