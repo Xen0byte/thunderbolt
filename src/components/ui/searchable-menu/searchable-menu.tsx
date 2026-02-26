@@ -191,11 +191,11 @@ export const SearchableMenu = <T,>({
         align={isMobile ? 'center' : align}
         side={side}
         collisionPadding={16}
-        className={cn('p-0 rounded-lg duration-100', showBlur && 'z-50', contentClassName)}
+        className={cn('p-0 rounded-lg overflow-hidden duration-100', showBlur && 'z-50', contentClassName)}
         style={{ width: contentWidth }}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <div className="flex flex-col gap-2 bg-background rounded-lg">
+        <div className="flex flex-col gap-2 bg-background">
           {searchable && (
             <div className="px-4 pt-4">
               <div className="relative">
