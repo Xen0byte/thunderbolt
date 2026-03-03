@@ -94,18 +94,31 @@ What it does:
 
 Rules: one atomic commit per invocation, never amends, never force pushes, never skips pre-commit hooks. If changes span unrelated concerns, it asks whether to split into multiple commits.
 
-## Git Worktrees
+## Work Context
 
-### `/thundertree`
+### `/thunderin`
 
-Create a git worktree from a branch name or Linear ticket.
+Enter a work context — create a worktree, install deps, or bootstrap the environment.
 
 ```
-/thundertree my-feature     # create worktree for a branch
-/thundertree THU-456        # look up the Linear ticket's branch and create a worktree
+/thunderin my-feature     # create worktree for a branch
+/thunderin THU-456        # look up the Linear ticket's branch and create a worktree
+/thunderin setup          # install frontend + backend dependencies
+/thunderin up             # full bootstrap (doctor, setup, docker)
+/thunderin up all         # full bootstrap + dev servers
 ```
 
 When given a Linear ticket ID, it fetches the ticket's branch name automatically. Reports the worktree path, branch name, and whether it was created from remote or as a new branch.
+
+### `/thunderout`
+
+Leave the current worktree, tear it down, and return to `main`.
+
+```
+/thunderout
+```
+
+Checks for uncommitted changes and unpushed commits before removing the worktree. Warns and asks for confirmation if work would be lost.
 
 ## Automation
 

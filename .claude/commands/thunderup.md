@@ -11,17 +11,8 @@ Bootstrap the Thunderbolt dev environment. Accepts an optional argument via $ARG
 - **`all`:** Run the standard bootstrap above, then also:
   5. `make run` — start backend (:8000) and frontend (:5173) dev servers
 
-- **Matches `THU-\d+`** (Linear ticket): Create a worktree for the ticket branch first, then run the standard bootstrap inside that worktree:
-  1. Run `linear issue view <id> --json --no-pager` to get the branch name
-  2. `git fetch origin`
-  3. If the branch exists on remote: `git worktree add .claude/worktrees/<dir> origin/<branch>`
-  4. If not: `git worktree add .claude/worktrees/<dir> -b <branch>`
-  5. cd into the worktree, then run the standard bootstrap steps
+- **Matches `THU-\d+`** (Linear ticket): Create a worktree for the ticket branch first using `/thunderin <id>`, then run the standard bootstrap inside that worktree.
 
-- **Anything else** (branch name): Create a worktree for that branch, then run the standard bootstrap inside:
-  1. `git fetch origin`
-  2. If the branch exists on remote: `git worktree add .claude/worktrees/<dir> origin/<branch>`
-  3. If not: `git worktree add .claude/worktrees/<dir> -b <branch>`
-  4. cd into the worktree, then run the standard bootstrap steps
+- **Anything else** (branch name): Create a worktree for that branch using `/thunderin <branch>`, then run the standard bootstrap inside that worktree.
 
 Run each step sequentially. If `make doctor` reports critical failures, stop and report — don't continue the bootstrap.
