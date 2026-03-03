@@ -18,8 +18,14 @@ Create a git worktree from a branch name or Linear ticket. Argument is passed vi
    - If the remote branch exists: `git worktree add .claude/worktrees/<dir> origin/<branch>`
    - If not: `git worktree add .claude/worktrees/<dir> -b <branch>`
 
-6. Report:
+6. If the worktree already exists at the target path, skip creation and pull the latest from the remote:
+   - `cd` into the worktree directory
+   - `git pull` to get the latest changes
+
+7. `cd` into the worktree directory so subsequent commands run there.
+
+8. Report:
    - Worktree path
    - Branch name
-   - Whether it was created from remote or as a new branch
+   - Whether it was created from remote, as a new branch, or already existed
    - Ticket info (if applicable)
