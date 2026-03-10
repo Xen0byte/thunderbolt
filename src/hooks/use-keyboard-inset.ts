@@ -8,9 +8,8 @@ import { useEffect } from 'react'
  * - `--vv-height`: visual viewport height (px)
  * - `--kb`:        keyboard inset height (px)
  *
- * Prevents iOS Safari's native viewport scroll (which pushes the header
- * offscreen) by locking `window.scrollTo(0, 0)` on every animation frame
- * while the viewport is changing.
+ * Prevents iOS Safari's native viewport scroll by locking html/body to
+ * position:fixed (via CSS) and resetting any scroll that sneaks through.
  */
 export const useKeyboardInset = (): void => {
   useEffect(() => {
@@ -21,12 +20,15 @@ export const useKeyboardInset = (): void => {
     let prevHeight = vv.height
     let stableFrames = 0
 
-    const apply = () => {
-      // Prevent iOS Safari from scrolling the layout viewport
+    // Immediately kill any viewport scroll iOS tries to do
+    const lockScroll = () => {
       if (window.scrollY !== 0 || window.scrollX !== 0) {
         window.scrollTo(0, 0)
       }
+    }
 
+    const apply = () => {
+      lockScroll()
       const el = document.documentElement.style
       el.setProperty('--vv-height', `${vv.height}px`)
       el.setProperty('--kb', `${Math.max(0, window.innerHeight - vv.height - vv.offsetTop)}px`)
@@ -60,12 +62,15 @@ export const useKeyboardInset = (): void => {
 
     apply()
 
+    // Synchronous scroll listener — fires before next paint
+    window.addEventListener('scroll', lockScroll, { passive: false })
     document.addEventListener('focusin', startPolling)
     document.addEventListener('focusout', startPolling)
     vv.addEventListener('resize', startPolling)
     vv.addEventListener('scroll', startPolling)
 
     return () => {
+      window.removeEventListener('scroll', lockScroll)
       document.removeEventListener('focusin', startPolling)
       document.removeEventListener('focusout', startPolling)
       vv.removeEventListener('resize', startPolling)
