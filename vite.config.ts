@@ -67,6 +67,7 @@ export default defineConfig({
     },
   ],
   resolve: {
+    dedupe: ['@powersync/common', '@powersync/react', 'react'],
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@shared': path.resolve(__dirname, './shared'),

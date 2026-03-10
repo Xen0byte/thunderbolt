@@ -1,6 +1,7 @@
 import '@/lib/dayjs'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router'
+import { PowerSyncContext } from '@powersync/react'
 
 import ChatDetailPage from '@/chats/detail'
 import MagicLinkVerify from '@/components/magic-link-verify'
@@ -45,6 +46,8 @@ import SettingsLayout from './settings/layout'
 import type { InitData } from './types'
 import { useSettings } from './hooks/use-settings'
 import { isPrPreview } from './lib/platform'
+import { getPowerSyncInstance } from './db/powersync'
+import { type ComponentProps } from 'react'
 
 const queryClient = new QueryClient()
 
@@ -136,37 +139,45 @@ export const App = () => {
       return <AppErrorScreen error={initError} isClearingDatabase={isInitializing} onClearDatabase={clearDatabase} />
     }
 
-    if (!initData) {
+    // TODO: PowerSync is our only database provider, so we can safely assert it's not null.
+    // We may need to refactor the database classes to make this more robust.
+    const powerSyncInstance = getPowerSyncInstance()
+
+    if (!initData || !powerSyncInstance) {
       return <Loading />
     }
 
     return (
-      <QueryClientProvider client={queryClient}>
-        <HttpClientProvider httpClient={initData.httpClient}>
-          <AuthProvider>
-            <SignInModalProvider>
-              <PostHogProvider client={initData.posthogClient}>
-                <TrayProvider tray={initData.tray} window={initData.window}>
-                  <MCPProvider>
-                    <HapticsProvider>
-                      <SidebarProvider>
-                        <ContentViewProvider
-                          initialSideviewType={initData.sideviewType}
-                          initialSideviewId={initData.sideviewId}
-                        >
-                          <ExternalLinkDialogProvider>
-                            <AppContent initData={initData} />
-                          </ExternalLinkDialogProvider>
-                        </ContentViewProvider>
-                      </SidebarProvider>
-                    </HapticsProvider>
-                  </MCPProvider>
-                </TrayProvider>
-              </PostHogProvider>
-            </SignInModalProvider>
-          </AuthProvider>
-        </HttpClientProvider>
-      </QueryClientProvider>
+      <PowerSyncContext.Provider
+        value={powerSyncInstance as unknown as ComponentProps<typeof PowerSyncContext.Provider>['value']}
+      >
+        <QueryClientProvider client={queryClient}>
+          <HttpClientProvider httpClient={initData.httpClient}>
+            <AuthProvider>
+              <SignInModalProvider>
+                <PostHogProvider client={initData.posthogClient}>
+                  <TrayProvider tray={initData.tray} window={initData.window}>
+                    <MCPProvider>
+                      <HapticsProvider>
+                        <SidebarProvider>
+                          <ContentViewProvider
+                            initialSideviewType={initData.sideviewType}
+                            initialSideviewId={initData.sideviewId}
+                          >
+                            <ExternalLinkDialogProvider>
+                              <AppContent initData={initData} />
+                            </ExternalLinkDialogProvider>
+                          </ContentViewProvider>
+                        </SidebarProvider>
+                      </HapticsProvider>
+                    </MCPProvider>
+                  </TrayProvider>
+                </PostHogProvider>
+              </SignInModalProvider>
+            </AuthProvider>
+          </HttpClientProvider>
+        </QueryClientProvider>
+      </PowerSyncContext.Provider>
     )
   }
 
