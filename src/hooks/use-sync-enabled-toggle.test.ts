@@ -38,8 +38,8 @@ describe('useSyncEnabledToggle', () => {
 
     expect(result.current).toMatchObject({
       syncEnabled: expect.any(Boolean),
-      syncEnableWarningOpen: false,
-      setSyncEnableWarningOpen: expect.any(Function),
+      syncSetupOpen: false,
+      setSyncSetupOpen: expect.any(Function),
       handleSyncToggle: expect.any(Function),
       handleConfirmEnableSync: expect.any(Function),
     })
@@ -52,7 +52,7 @@ describe('useSyncEnabledToggle', () => {
       await result.current.handleSyncToggle(true)
     })
 
-    expect(result.current.syncEnableWarningOpen).toBe(true)
+    expect(result.current.syncSetupOpen).toBe(true)
   })
 
   it('handleSyncToggle(false) disables sync and tracks event', async () => {

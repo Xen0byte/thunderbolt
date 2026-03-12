@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { SyncEnableWarningDialog } from '@/components/sync-enable-warning-dialog'
+import { SyncSetupModal } from '@/components/sync-setup/sync-setup-modal'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -113,7 +113,7 @@ export default function PreferencesSettingsPage() {
   // Local state for name input (only save on blur to avoid DB writes on every keystroke)
   const [nameInput, setNameInput] = useState('')
 
-  const { syncEnabled, syncEnableWarningOpen, setSyncEnableWarningOpen, handleSyncToggle, handleConfirmEnableSync } =
+  const { syncEnabled, syncSetupOpen, setSyncSetupOpen, handleSyncToggle, handleConfirmEnableSync } =
     useSyncEnabledToggle()
   const { connectionStatus } = usePowerSyncStatus()
   const isConnecting = connectionStatus === 'connecting'
@@ -829,11 +829,7 @@ export default function PreferencesSettingsPage() {
         </div>
       </SectionCard>
 
-      <SyncEnableWarningDialog
-        open={syncEnableWarningOpen}
-        onOpenChange={setSyncEnableWarningOpen}
-        onConfirm={handleConfirmEnableSync}
-      />
+      <SyncSetupModal open={syncSetupOpen} onOpenChange={setSyncSetupOpen} onComplete={handleConfirmEnableSync} />
 
       <div className="h-6" />
 

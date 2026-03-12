@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
  */
 export const useSyncEnabledToggle = () => {
   const [syncEnabled, setSyncEnabledState] = useState(isSyncEnabled())
-  const [syncEnableWarningOpen, setSyncEnableWarningOpen] = useState(false)
+  const [syncSetupOpen, setSyncSetupOpen] = useState(false)
 
   useEffect(() => {
     const handleSyncEnabledChange = (event: Event) => {
@@ -28,20 +28,20 @@ export const useSyncEnabledToggle = () => {
       trackEvent('settings_sync_disabled')
       return
     }
-    setSyncEnableWarningOpen(true)
+    setSyncSetupOpen(true)
   }
 
   const handleConfirmEnableSync = async () => {
     await setSyncEnabled(true)
     setSyncEnabledState(true)
     trackEvent('settings_sync_enabled')
-    setSyncEnableWarningOpen(false)
+    setSyncSetupOpen(false)
   }
 
   return {
     syncEnabled,
-    syncEnableWarningOpen,
-    setSyncEnableWarningOpen,
+    syncSetupOpen,
+    setSyncSetupOpen,
     handleSyncToggle,
     handleConfirmEnableSync,
   }

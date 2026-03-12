@@ -3,7 +3,7 @@ import { usePowerSyncStatus } from '@/hooks/use-powersync-status'
 import { useSyncEnabledToggle } from '@/hooks/use-sync-enabled-toggle'
 import { cn } from '@/lib/utils'
 import { Cloud, CloudOff, Loader2 } from 'lucide-react'
-import { SyncEnableWarningDialog } from '@/components/sync-enable-warning-dialog'
+import { SyncSetupModal } from '@/components/sync-setup/sync-setup-modal'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
 
@@ -17,7 +17,7 @@ export const PowerSyncStatus = () => {
   const isAuthenticated = !!session?.user
 
   const { connectionStatus, hasSynced, lastSyncedAt } = usePowerSyncStatus()
-  const { syncEnabled, syncEnableWarningOpen, setSyncEnableWarningOpen, handleSyncToggle, handleConfirmEnableSync } =
+  const { syncEnabled, syncSetupOpen, setSyncSetupOpen, handleSyncToggle, handleConfirmEnableSync } =
     useSyncEnabledToggle()
 
   const isConnected = connectionStatus === 'connected'
@@ -107,11 +107,7 @@ export const PowerSyncStatus = () => {
           </div>
         </PopoverContent>
       </Popover>
-      <SyncEnableWarningDialog
-        open={syncEnableWarningOpen}
-        onOpenChange={setSyncEnableWarningOpen}
-        onConfirm={handleConfirmEnableSync}
-      />
+      <SyncSetupModal open={syncSetupOpen} onOpenChange={setSyncSetupOpen} onComplete={handleConfirmEnableSync} />
     </>
   )
 }
