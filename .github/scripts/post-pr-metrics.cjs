@@ -49,7 +49,7 @@ module.exports = async ({ github, context }) => {
     if (baselineBundle) {
       const delta = bundleSize - baselineBundle
       const pct = ((delta / baselineBundle) * 100).toFixed(1)
-      const sign = delta >= 0 ? '+' : ''
+      const sign = delta >= 0 ? '+' : '-'
       const icon = delta > 51200 ? ':red_circle:' : delta > 10240 ? ':yellow_circle:' : ':green_circle:'
       return `${icon} ${fmt(baselineBundle)} → ${fmt(bundleSize)} (${sign}${fmt(Math.abs(delta))}, ${sign}${pct}%)`
     }
@@ -61,7 +61,7 @@ module.exports = async ({ github, context }) => {
   // - Falls back gracefully when coverage couldn't be parsed or no baseline exists yet.
   const coverageLine = (() => {
     if (!COVERAGE || COVERAGE === 'N/A') return '—'
-    if (baselineCoverage) {
+    if (baselineCoverage && baselineCoverage !== 'N/A') {
       const delta = (parseFloat(COVERAGE) - parseFloat(baselineCoverage)).toFixed(1)
       const sign = parseFloat(delta) >= 0 ? '+' : ''
       const icon =
