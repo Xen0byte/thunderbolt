@@ -6,7 +6,6 @@ type DocumentResultWidgetProps = {
   name: string
   fileId: string
   snippet?: string
-  score?: string
   messageId: string
 }
 
@@ -17,38 +16,14 @@ const getFileIcon = (fileName: string) => {
   return File
 }
 
-/** Maps a 0-1 score to 1-5 notches for the relevance bar */
-const getRelevanceLevel = (score: number): number => {
-  if (score >= 0.8) return 5
-  if (score >= 0.6) return 4
-  if (score >= 0.4) return 3
-  if (score >= 0.2) return 2
-  return 1
-}
-
-const RelevanceBar = ({ score }: { score: number }) => {
-  const level = getRelevanceLevel(score)
-  return (
-    <div className="flex shrink-0 flex-col items-start gap-1">
-      <div className="flex w-full gap-0.5">
-        {Array.from({ length: 5 }, (_, i) => (
-          <div key={i} className={`h-1.5 flex-1 rounded-sm ${i < level ? 'bg-primary' : 'bg-muted'}`} />
-        ))}
-      </div>
-      <span className="text-xs text-muted-foreground">Relevance</span>
-    </div>
-  )
-}
-
 /**
  * Renders a source document card from Haystack search results.
- * Shows file name, content snippet, and relevance bar.
+ * Shows file name and content snippet.
  * Clicking opens the document in the sidebar viewer.
  */
-export const DocumentResultWidget = ({ name, fileId, snippet, score }: DocumentResultWidgetProps) => {
+export const DocumentResultWidget = ({ name, fileId, snippet }: DocumentResultWidgetProps) => {
   const { showSideview } = useContentView()
   const Icon = getFileIcon(name)
-  const scoreValue = score ? Number.parseFloat(score) : null
 
   const handleClick = useCallback(() => {
     showSideview('document', `${fileId}:${name}`)
@@ -67,7 +42,6 @@ export const DocumentResultWidget = ({ name, fileId, snippet, score }: DocumentR
           <p className="truncate text-sm font-medium">{name}</p>
           {snippet && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{snippet}</p>}
         </div>
-        {scoreValue !== null && <RelevanceBar score={scoreValue} />}
       </div>
     </div>
   )

@@ -3,7 +3,7 @@
  */
 export const instructions = `## Document Result
 <widget:document-result name="filename.pdf" fileId="uuid" snippet="relevant text excerpt" score="0.95" />
-Shows a source document card with file name, content snippet, and relevance score.
+Shows a source document card with file name and content snippet.
 Used in Document Search mode to display source references for grounded answers.
 
 ### Usage Rules
@@ -11,4 +11,4 @@ Used in Document Search mode to display source references for grounded answers.
 - name: the source file name (e.g., "report.pdf")
 - fileId: the unique file identifier from the document search
 - snippet: a brief excerpt of relevant content from the document (optional)
-- score: relevance score as a string (optional, e.g., "0.85")`
+- score: relevance score as a string (optional, e.g., "0.85") — used for sorting, not displayed`
