@@ -1,34 +1,50 @@
-/**
- * Returns true if the string is valid base64 (non-empty, decodable).
- * Uses try/catch around atob(); refactor later for format checks or encryption markers.
- */
-export const isValidBase64 = (value: string): boolean => {
-  if (typeof value !== 'string' || value.length === 0) {
+const base64Prefix = 'b64:'
+
+/** Check if a string was encoded by our codec (prefixed format). */
+export const isBase64 = (str: string): boolean => {
+  if (!str || str.trim().length === 0) {
     return false
   }
-  try {
-    atob(value)
-    return true
-  } catch {
-    return false
-  }
+  return str.startsWith(base64Prefix)
 }
 
 /**
- * If valid base64, returns decoded string; otherwise returns original.
+ * Decode a base64 string. Handles both prefixed (new) and unprefixed (legacy) formats.
+ * Returns original if not valid base64.
  */
-export const decodeIfValidBase64 = (value: string): string => {
-  if (typeof value !== 'string' || value.length === 0) {
-    return value
+export const decodeIfBase64 = (str: string): string => {
+  if (!str) {
+    return str
   }
+
+  // New prefixed format
+  if (str.startsWith(base64Prefix)) {
+    try {
+      return decodeURIComponent(escape(atob(str.slice(base64Prefix.length))))
+    } catch {
+      return str
+    }
+  }
+
+  // Legacy unprefixed format: try round-trip detection for backward compatibility
   try {
-    return atob(value)
+    if (btoa(atob(str)) === str) {
+      return decodeURIComponent(escape(atob(str)))
+    }
   } catch {
-    return value
+    // not base64
   }
+
+  return str
 }
 
-/**
- * Encodes a string to base64.
- */
-export const encodeToBase64 = (value: string): string => btoa(value)
+/** Base64 encode a string with prefix. Returns original if already encoded. */
+export const encodeIfNotBase64 = (str: string): string => {
+  if (!str) {
+    return str
+  }
+  if (str.startsWith(base64Prefix)) {
+    return str
+  }
+  return base64Prefix + btoa(unescape(encodeURIComponent(str)))
+}
