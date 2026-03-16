@@ -1,4 +1,4 @@
-import { gh, runCommand, getCurrentBranch } from './repo'
+import { gh, runCommand, getCurrentBranch, parseRequiredPR } from './repo'
 
 type CheckResult = {
   name: string
@@ -89,16 +89,4 @@ export const handleCILogs = async (args: string[]): Promise<void> => {
   const branch = branchIdx !== -1 && branchIdx + 1 < args.length ? args[branchIdx + 1] : undefined
   const logs = await getFailedLogs(branch)
   console.log(logs)
-}
-
-const parseRequiredPR = (args: string[]): number => {
-  const idx = args.indexOf('--pr')
-  if (idx === -1 || idx + 1 >= args.length) {
-    throw new Error('Missing required argument: --pr')
-  }
-  const num = parseInt(args[idx + 1], 10)
-  if (isNaN(num)) {
-    throw new Error(`--pr must be a number, got: ${args[idx + 1]}`)
-  }
-  return num
 }

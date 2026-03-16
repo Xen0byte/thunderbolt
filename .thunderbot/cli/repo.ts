@@ -1,4 +1,7 @@
 import { spawn } from 'child_process'
+import { mkdtempSync, writeFileSync, rmSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
 
 type CommandResult = {
   stdout: string
@@ -71,4 +74,53 @@ export const getCurrentBranch = async (): Promise<string> => {
     throw new Error(`Failed to get current branch: ${result.stderr}`)
   }
   return result.stdout
+}
+
+/**
+ * Write a GraphQL query to a temp file and execute it via gh api graphql.
+ * This avoids the $id shell expansion issue that occurs with inline queries.
+ */
+export const runGraphQL = async (query: string, variables: Record<string, string>): Promise<string> => {
+  const dir = mkdtempSync(join(tmpdir(), 'thunderbot-gql-'))
+  const queryFile = join(dir, 'query.graphql')
+  try {
+    writeFileSync(queryFile, query)
+    const args = ['api', 'graphql', '-F', `query=@${queryFile}`]
+    for (const [key, value] of Object.entries(variables)) {
+      args.push('-f', `${key}=${value}`)
+    }
+    return await gh(args)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+/** Parse a required argument by flag name */
+export const parseRequiredArg = (args: string[], flag: string, type: 'number' | 'string'): number | string => {
+  const idx = args.indexOf(flag)
+  if (idx === -1 || idx + 1 >= args.length) {
+    throw new Error(`Missing required argument: ${flag}`)
+  }
+  const raw = args[idx + 1]
+  if (type === 'number') {
+    const num = parseInt(raw, 10)
+    if (isNaN(num)) {
+      throw new Error(`${flag} must be a number, got: ${raw}`)
+    }
+    return num
+  }
+  return raw
+}
+
+/** Parse the --pr flag from args, throwing if missing */
+export const parseRequiredPR = (args: string[]): number => {
+  const idx = args.indexOf('--pr')
+  if (idx === -1 || idx + 1 >= args.length) {
+    throw new Error('Missing required argument: --pr')
+  }
+  const num = parseInt(args[idx + 1], 10)
+  if (isNaN(num)) {
+    throw new Error(`--pr must be a number, got: ${args[idx + 1]}`)
+  }
+  return num
 }
