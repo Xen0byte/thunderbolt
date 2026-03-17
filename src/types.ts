@@ -96,6 +96,13 @@ export type HaystackDocumentMeta = {
   file: { id: string; name: string }
 }
 
+export type HaystackReferenceMeta = {
+  position: number
+  fileId: string
+  fileName: string
+  pageNumber?: number
+}
+
 export type UIMessageMetadata = {
   modelId?: string
   usage?: LanguageModelV2Usage
@@ -104,6 +111,8 @@ export type UIMessageMetadata = {
   reasoningStartTimes?: Record<string, number>
   sources?: SourceMetadata[]
   haystackDocuments?: HaystackDocumentMeta[]
+  haystackReferences?: HaystackReferenceMeta[]
+  isDocumentSearch?: boolean
 }
 
 export type SideviewType = 'message' | 'thread' | 'imap' | 'document'

@@ -23,9 +23,10 @@ const getFileType = (fileName: string): FileType => {
 type DocumentSidebarViewerProps = {
   fileId: string
   fileName: string
+  initialPage?: number
 }
 
-export const PdfSidebarViewer = ({ fileId, fileName }: DocumentSidebarViewerProps) => {
+export const PdfSidebarViewer = ({ fileId, fileName, initialPage }: DocumentSidebarViewerProps) => {
   const { close } = useContentView()
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [docxHtml, setDocxHtml] = useState<string | null>(null)
@@ -105,9 +106,20 @@ export const PdfSidebarViewer = ({ fileId, fileName }: DocumentSidebarViewerProp
     document.body.removeChild(a)
   }, [blobUrl, fileName])
 
-  const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    setNumPages(numPages)
+  const onDocumentLoadSuccess = useCallback(({ numPages: pages }: { numPages: number }) => {
+    setNumPages(pages)
   }, [])
+
+  // Scroll to initial page after all pages render
+  useEffect(() => {
+    if (!initialPage || !numPages || initialPage > numPages) return
+    // Allow a frame for pages to render
+    const timer = setTimeout(() => {
+      const el = document.querySelector(`[data-page-number="${initialPage}"]`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [initialPage, numPages])
 
   const downloadAction = (
     <Button onClick={handleDownload} disabled={!blobUrl} variant="ghost" size="icon" className="h-8 w-8 rounded-full">
@@ -136,7 +148,9 @@ export const PdfSidebarViewer = ({ fileId, fileName }: DocumentSidebarViewerProp
             <Document file={blobUrl} onLoadSuccess={onDocumentLoadSuccess} loading={null}>
               {numPages &&
                 Array.from({ length: numPages }, (_, i) => (
-                  <Page key={i + 1} pageNumber={i + 1} width={500} className="mb-4" />
+                  <div key={i + 1} data-page-number={i + 1}>
+                    <Page pageNumber={i + 1} width={500} className="mb-4" />
+                  </div>
                 ))}
             </Document>
           )}

@@ -1,9 +1,10 @@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { useContentView } from '@/content-view/context'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useSettings } from '@/hooks/use-settings'
 import type { CitationSource } from '@/types/citation'
-import { memo, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { useCitationPopover } from './citation-popover'
 import { SourceList } from './source-list'
 
@@ -24,6 +25,11 @@ export const CitationBadge = memo(({ sources, citationId }: CitationBadgeProps) 
     return null
   }
 
+  const primary = sources.find((s) => s.isPrimary) || sources[0]
+  if (primary.isLoading) {
+    return <LoadingBadge />
+  }
+
   if (ctx && citationId !== undefined) {
     return <ManagedBadge sources={sources} citationId={citationId} />
   }
@@ -36,42 +42,78 @@ CitationBadge.displayName = 'CitationBadge'
 const badgeClass =
   'inline-flex max-w-48 items-center gap-1 px-2 pt-0.5 pb-1 text-xs font-normal rounded-full bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1'
 
+const loadingBadgeClass =
+  'inline-flex items-center justify-center gap-[3px] px-2 pt-0.5 pb-1 text-xs rounded-full bg-muted cursor-default leading-none'
+
+const LoadingBadge = memo(() => (
+  <span className={loadingBadgeClass} aria-label="Loading citation">
+    {/* Zero-width space gives the badge the same text-line height as regular badges */}
+    <span className="w-0 overflow-hidden">{'\u200B'}</span>
+    <span className="size-[3.5px] rounded-full bg-muted-foreground/60 animate-[typing-bounce_1.4s_ease-in-out_infinite]" />
+    <span className="size-[3.5px] rounded-full bg-muted-foreground/60 animate-[typing-bounce_1.4s_ease-in-out_0.2s_infinite]" />
+    <span className="size-[3.5px] rounded-full bg-muted-foreground/60 animate-[typing-bounce_1.4s_ease-in-out_0.4s_infinite]" />
+  </span>
+))
+
+LoadingBadge.displayName = 'LoadingBadge'
+
 const getBadgeLabel = (sources: CitationSource[]) => {
   const primary = sources.find((s) => s.isPrimary) || sources[0]
+  const label = primary.documentMeta ? primary.title : primary.siteName || primary.title
   return {
-    displayName: primary.siteName || primary.title,
+    displayName: label,
     additionalCount: sources.length > 1 ? `+${sources.length - 1}` : null,
-    ariaLabel: `View source: ${primary.siteName || primary.title}`,
+    ariaLabel: primary.documentMeta ? `Open document: ${label}` : `View source: ${label}`,
   }
+}
+
+/** True when there's exactly one source and it's a document (click → open sideview directly) */
+const isSingleDocumentCitation = (sources: CitationSource[]) => {
+  return sources.length === 1 && !!sources[0]?.documentMeta
 }
 
 // --- Context-managed variant (inline in streaming markdown) ---
 
 const ManagedBadge = memo(({ sources, citationId }: { sources: CitationSource[]; citationId: number }) => {
   const ctx = useCitationPopover()!
+  const { showSideview } = useContentView()
   const isOpen = ctx.popover?.citationId === citationId
   const { displayName, additionalCount, ariaLabel } = getBadgeLabel(sources)
+  const isSingleDoc = isSingleDocumentCitation(sources)
+
+  const openDocumentSideview = useCallback(() => {
+    const meta = sources[0].documentMeta!
+    const sideviewId =
+      meta.pageNumber != null ? `${meta.fileId}:${meta.fileName}:${meta.pageNumber}` : `${meta.fileId}:${meta.fileName}`
+    showSideview('document', sideviewId)
+  }, [sources, showSideview])
 
   const toggle = (rect: DOMRect) => {
-    if (isOpen) {
-      ctx.close()
-    } else {
-      ctx.open(citationId, sources, rect)
+    if (isOpen) ctx.close()
+    else ctx.open(citationId, sources, rect)
+  }
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (isSingleDoc) {
+      openDocumentSideview()
+      return
     }
+    toggle(e.currentTarget.getBoundingClientRect())
   }
 
   return (
     <button
-      onClick={(e) => toggle(e.currentTarget.getBoundingClientRect())}
+      onClick={handleClick}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
-          toggle(e.currentTarget.getBoundingClientRect())
+          if (isSingleDoc) openDocumentSideview()
+          else toggle(e.currentTarget.getBoundingClientRect())
         }
       }}
       className={badgeClass}
       aria-label={ariaLabel}
-      aria-expanded={isOpen}
+      aria-expanded={isSingleDoc ? undefined : isOpen}
       type="button"
     >
       <span className="truncate">{displayName}</span>
@@ -88,26 +130,48 @@ const StandaloneBadge = memo(({ sources }: { sources: CitationSource[] }) => {
   const [isOpen, setIsOpen] = useState(false)
   const { isMobile } = useIsMobile()
   const { cloudUrl } = useSettings({ cloud_url: 'http://localhost:8000/v1' })
+  const { showSideview } = useContentView()
   const { displayName, additionalCount, ariaLabel } = getBadgeLabel(sources)
+  const isSingleDoc = isSingleDocumentCitation(sources)
+
+  const openDocumentSideview = useCallback(() => {
+    const meta = sources[0].documentMeta!
+    const sideviewId =
+      meta.pageNumber != null ? `${meta.fileId}:${meta.fileName}:${meta.pageNumber}` : `${meta.fileId}:${meta.fileName}`
+    showSideview('document', sideviewId)
+  }, [sources, showSideview])
+
+  const handleClick = () => {
+    if (isSingleDoc) {
+      openDocumentSideview()
+      return
+    }
+    setIsOpen(!isOpen)
+  }
 
   const badge = (
     <button
-      onClick={() => setIsOpen(!isOpen)}
+      onClick={handleClick}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
-          setIsOpen(!isOpen)
+          if (isSingleDoc) openDocumentSideview()
+          else setIsOpen(!isOpen)
         }
       }}
       className={badgeClass}
       aria-label={ariaLabel}
-      aria-expanded={isOpen}
+      aria-expanded={isSingleDoc ? undefined : isOpen}
       type="button"
     >
       <span className="truncate">{displayName}</span>
       {additionalCount && <span className="shrink-0">{additionalCount}</span>}
     </button>
   )
+
+  if (isSingleDoc) {
+    return badge
+  }
 
   if (!isMobile) {
     return (

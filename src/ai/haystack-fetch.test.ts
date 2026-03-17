@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'bun:test'
-import { formatDocumentWidgets, parseSSE, type DeepsetSSEEvent } from './haystack-fetch'
+import {
+  extractReferences,
+  formatDocumentWidgets,
+  parseSSE,
+  processSSEEvents,
+  type DeepsetSSEEvent,
+  type DeepsetResultPayload,
+} from './haystack-fetch'
 
 /** Helper to create a ReadableStream from SSE text */
 const createSSEStream = (text: string): ReadableStream<Uint8Array> => {
@@ -275,5 +282,269 @@ describe('formatDocumentWidgets', () => {
 
     expect(widgets).toBe('')
     expect(documentsMeta).toHaveLength(1)
+  })
+
+  it('should only show widgets for referenced files when references provided', () => {
+    const result: DeepsetResultPayload = {
+      answers: [
+        {
+          answer: 'Test',
+          files: [
+            { id: 'f1', name: 'cited.pdf' },
+            { id: 'f2', name: 'uncited.pdf' },
+          ],
+        },
+      ],
+      documents: [
+        { id: 'd1', content: 'Cited content', score: 0.9, file: { id: 'f1', name: 'cited.pdf' } },
+        { id: 'd2', content: 'Uncited content', score: 0.8, file: { id: 'f2', name: 'uncited.pdf' } },
+      ],
+    }
+
+    const references = [{ position: 1, fileId: 'f1', fileName: 'cited.pdf', pageNumber: 3 }]
+    const { widgets } = formatDocumentWidgets(result, references)
+
+    expect(widgets).toContain('cited.pdf')
+    expect(widgets).not.toContain('uncited.pdf')
+  })
+
+  it('should show all files when no references (backward compat)', () => {
+    const result: DeepsetResultPayload = {
+      answers: [
+        {
+          answer: 'Test',
+          files: [
+            { id: 'f1', name: 'a.pdf' },
+            { id: 'f2', name: 'b.pdf' },
+          ],
+        },
+      ],
+      documents: [
+        { id: 'd1', content: 'A', score: 0.9, file: { id: 'f1', name: 'a.pdf' } },
+        { id: 'd2', content: 'B', score: 0.8, file: { id: 'f2', name: 'b.pdf' } },
+      ],
+    }
+
+    const { widgets } = formatDocumentWidgets(result)
+
+    expect(widgets).toContain('a.pdf')
+    expect(widgets).toContain('b.pdf')
+  })
+})
+
+describe('extractReferences', () => {
+  it('should map _references + documents to HaystackReferenceMeta[]', () => {
+    const result: DeepsetResultPayload = {
+      answers: [
+        {
+          answer: 'See [1] and [2]',
+          files: [
+            { id: 'f1', name: 'report.pdf' },
+            { id: 'f2', name: 'guide.pdf' },
+          ],
+          meta: {
+            _references: [
+              { document_position: 1, document_id: 'd1' },
+              { document_position: 2, document_id: 'd2' },
+            ],
+          },
+        },
+      ],
+      documents: [
+        { id: 'd1', content: 'Report', score: 0.9, file: { id: 'f1', name: 'report.pdf' }, meta: { page_number: 5 } },
+        { id: 'd2', content: 'Guide', score: 0.8, file: { id: 'f2', name: 'guide.pdf' }, meta: { page_number: 12 } },
+      ],
+    }
+
+    const refs = extractReferences(result)
+
+    expect(refs).toHaveLength(2)
+    expect(refs[0]).toEqual({ position: 1, fileId: 'f1', fileName: 'report.pdf', pageNumber: 5 })
+    expect(refs[1]).toEqual({ position: 2, fileId: 'f2', fileName: 'guide.pdf', pageNumber: 12 })
+  })
+
+  it('should return [] when _references is missing', () => {
+    const result: DeepsetResultPayload = {
+      answers: [{ answer: 'No refs', files: [] }],
+      documents: [],
+    }
+
+    expect(extractReferences(result)).toEqual([])
+  })
+
+  it('should handle missing page_number (returns undefined)', () => {
+    const result: DeepsetResultPayload = {
+      answers: [
+        {
+          answer: 'See [1]',
+          files: [{ id: 'f1', name: 'report.pdf' }],
+          meta: { _references: [{ document_position: 1, document_id: 'd1' }] },
+        },
+      ],
+      documents: [{ id: 'd1', content: 'Report', score: 0.9, file: { id: 'f1', name: 'report.pdf' } }],
+    }
+
+    const refs = extractReferences(result)
+
+    expect(refs).toHaveLength(1)
+    expect(refs[0].pageNumber).toBeUndefined()
+  })
+
+  it('should skip references whose document_id has no matching document', () => {
+    const result: DeepsetResultPayload = {
+      answers: [
+        {
+          answer: 'See [1]',
+          files: [{ id: 'f1', name: 'report.pdf' }],
+          meta: { _references: [{ document_position: 1, document_id: 'nonexistent' }] },
+        },
+      ],
+      documents: [{ id: 'd1', content: 'Report', score: 0.9, file: { id: 'f1', name: 'report.pdf' } }],
+    }
+
+    expect(extractReferences(result)).toEqual([])
+  })
+})
+
+/** Mock writer that records all write() calls */
+const createMockWriter = () => {
+  const writes: Array<Record<string, unknown>> = []
+  return {
+    write: (data: Record<string, unknown>) => writes.push(data),
+    writes,
+  }
+}
+
+/** Helper to create an async generator from an array of events */
+async function* eventsToGenerator(events: DeepsetSSEEvent[]): AsyncGenerator<DeepsetSSEEvent> {
+  for (const event of events) {
+    yield event
+  }
+}
+
+describe('processSSEEvents', () => {
+  it('should emit message-metadata with haystackReferences immediately on result event', async () => {
+    const writer = createMockWriter()
+    const resultPayload: DeepsetResultPayload = {
+      answers: [
+        {
+          answer: 'See [1]',
+          files: [{ id: 'f1', name: 'report.pdf' }],
+          meta: { _references: [{ document_position: 1, document_id: 'd1' }] },
+        },
+      ],
+      documents: [
+        {
+          id: 'd1',
+          content: 'Report content',
+          score: 0.9,
+          file: { id: 'f1', name: 'report.pdf' },
+          meta: { page_number: 5 },
+        },
+      ],
+    }
+
+    const events: DeepsetSSEEvent[] = [
+      { type: 'delta', delta: 'See [1]' },
+      { type: 'result', result: resultPayload },
+    ]
+
+    await processSSEEvents(eventsToGenerator(events), writer, 'text-1')
+
+    const metadataWrites = writer.writes.filter((w) => w.type === 'message-metadata')
+    expect(metadataWrites).toHaveLength(1)
+    expect(metadataWrites[0].messageMetadata).toEqual({
+      haystackReferences: [{ position: 1, fileId: 'f1', fileName: 'report.pdf', pageNumber: 5 }],
+    })
+  })
+
+  it('should emit message-metadata BEFORE widget text-deltas (so UI has refs during streaming)', async () => {
+    const writer = createMockWriter()
+    const resultPayload: DeepsetResultPayload = {
+      answers: [
+        {
+          answer: 'See [1]',
+          files: [{ id: 'f1', name: 'report.pdf' }],
+          meta: { _references: [{ document_position: 1, document_id: 'd1' }] },
+        },
+      ],
+      documents: [
+        {
+          id: 'd1',
+          content: 'Report content',
+          score: 0.9,
+          file: { id: 'f1', name: 'report.pdf' },
+          meta: { page_number: 3 },
+        },
+      ],
+    }
+
+    await processSSEEvents(eventsToGenerator([{ type: 'result', result: resultPayload }]), writer, 'text-1')
+
+    const metadataIdx = writer.writes.findIndex((w) => w.type === 'message-metadata')
+    const widgetDeltaIdx = writer.writes.findIndex(
+      (w) => w.type === 'text-delta' && typeof w.delta === 'string' && w.delta.includes('widget:document-result'),
+    )
+
+    expect(metadataIdx).not.toBe(-1)
+    // metadata must come before widget delta (or widget delta may not exist if no widgets)
+    if (widgetDeltaIdx !== -1) {
+      expect(metadataIdx).toBeLessThan(widgetDeltaIdx)
+    }
+  })
+
+  it('should NOT emit message-metadata when result has no references', async () => {
+    const writer = createMockWriter()
+    const resultPayload: DeepsetResultPayload = {
+      answers: [{ answer: 'No refs', files: [{ id: 'f1', name: 'doc.pdf' }] }],
+      documents: [{ id: 'd1', content: 'Content', score: 0.9, file: { id: 'f1', name: 'doc.pdf' } }],
+    }
+
+    await processSSEEvents(eventsToGenerator([{ type: 'result', result: resultPayload }]), writer, 'text-1')
+
+    const metadataWrites = writer.writes.filter((w) => w.type === 'message-metadata')
+    expect(metadataWrites).toHaveLength(0)
+  })
+
+  it('should write text-deltas for delta events', async () => {
+    const writer = createMockWriter()
+    const events: DeepsetSSEEvent[] = [
+      { type: 'delta', delta: 'Hello ' },
+      { type: 'delta', delta: 'world' },
+    ]
+
+    await processSSEEvents(eventsToGenerator(events), writer, 'text-1')
+
+    const deltas = writer.writes.filter((w) => w.type === 'text-delta')
+    expect(deltas).toHaveLength(2)
+    expect(deltas[0].delta).toBe('Hello ')
+    expect(deltas[1].delta).toBe('world')
+  })
+
+  it('should return extracted references and documents', async () => {
+    const writer = createMockWriter()
+    const resultPayload: DeepsetResultPayload = {
+      answers: [
+        {
+          answer: 'See [1]',
+          files: [{ id: 'f1', name: 'report.pdf' }],
+          meta: { _references: [{ document_position: 1, document_id: 'd1' }] },
+        },
+      ],
+      documents: [
+        { id: 'd1', content: 'Report', score: 0.9, file: { id: 'f1', name: 'report.pdf' }, meta: { page_number: 5 } },
+      ],
+    }
+
+    const { references, documents } = await processSSEEvents(
+      eventsToGenerator([{ type: 'result', result: resultPayload }]),
+      writer,
+      'text-1',
+    )
+
+    expect(references).toHaveLength(1)
+    expect(references[0].position).toBe(1)
+    expect(documents).toHaveLength(1)
+    expect(documents[0].id).toBe('d1')
   })
 })

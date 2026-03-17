@@ -4,15 +4,31 @@ import { useQuery } from '@tanstack/react-query'
 import { useSideview } from './context'
 
 /**
- * Parses a document sideview ID in the format "fileId:fileName"
+ * Parses a document sideview ID in the format "fileId:fileName" or "fileId:fileName:pageNumber".
+ * The last `:` segment is treated as a page number only if it's a positive integer.
+ * @internal Exported for testing only
  */
-const parseDocumentSideviewId = (sideviewId: string) => {
+export const parseDocumentSideviewId = (sideviewId: string) => {
   const colonIndex = sideviewId.indexOf(':')
-  if (colonIndex === -1) return { fileId: sideviewId, fileName: 'document.pdf' }
-  return {
-    fileId: sideviewId.slice(0, colonIndex),
-    fileName: sideviewId.slice(colonIndex + 1),
+  if (colonIndex === -1) return { fileId: sideviewId, fileName: 'document.pdf', pageNumber: undefined }
+
+  const fileId = sideviewId.slice(0, colonIndex)
+  const rest = sideviewId.slice(colonIndex + 1)
+
+  const lastColonIndex = rest.lastIndexOf(':')
+  if (lastColonIndex !== -1) {
+    const maybePage = rest.slice(lastColonIndex + 1)
+    const pageNum = parseInt(maybePage, 10)
+    if (!isNaN(pageNum) && pageNum > 0 && String(pageNum) === maybePage) {
+      return {
+        fileId,
+        fileName: rest.slice(0, lastColonIndex),
+        pageNumber: pageNum,
+      }
+    }
   }
+
+  return { fileId, fileName: rest, pageNumber: undefined }
 }
 
 /**
@@ -49,8 +65,8 @@ export const Sideview = () => {
       return <EmailThreadView />
     case 'document': {
       if (!sideviewId) return null
-      const { fileId, fileName } = parseDocumentSideviewId(sideviewId)
-      return <PdfSidebarViewer fileId={fileId} fileName={fileName} />
+      const { fileId, fileName, pageNumber } = parseDocumentSideviewId(sideviewId)
+      return <PdfSidebarViewer fileId={fileId} fileName={fileName} initialPage={pageNumber} />
     }
     default:
       return <div>Unsupported sideview type</div>

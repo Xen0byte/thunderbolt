@@ -14,6 +14,14 @@ export type CitationSource = {
   favicon?: string
   /** Whether this is the primary source (first/most relevant) */
   isPrimary?: boolean
+  /** When true, this is a placeholder badge still loading (not clickable) */
+  isLoading?: boolean
+  /** When present, this citation points to a Haystack document instead of a URL */
+  documentMeta?: {
+    fileId: string
+    fileName: string
+    pageNumber?: number
+  }
 }
 
 /**

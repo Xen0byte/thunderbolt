@@ -1,5 +1,6 @@
 import { type MouseEvent, useState } from 'react'
 import type { CitationSource } from '@/types/citation'
+import { useContentView } from '@/content-view/context'
 import { useOpenExternalLink } from '@/components/chat/markdown-utils'
 import { deriveFaviconUrl, isSafeUrl } from '@/lib/url-utils'
 import { cn } from '@/lib/utils'
@@ -28,21 +29,30 @@ const getBadgeColor = (siteName: string = '') => {
 export const SourceCard = ({ source, className, proxyBase }: SourceCardProps) => {
   const [faviconError, setFaviconError] = useState(false)
   const openExternalLink = useOpenExternalLink()
+  const { showSideview } = useContentView()
 
+  const isDocument = !!source.documentMeta
   const displayTitle = source.title || source.url
-  const displaySiteName = source.siteName || 'Unknown'
-  const safeUrl = isSafeUrl(source.url) ? source.url : '#'
+  const displaySiteName = source.siteName || (isDocument ? '' : 'Unknown')
+  const safeUrl = !isDocument && isSafeUrl(source.url) ? source.url : '#'
   const explicitFavicon = source.favicon && isSafeUrl(source.favicon) ? source.favicon : null
-  const faviconUrl = explicitFavicon || deriveFaviconUrl(source.url, proxyBase)
+  const faviconUrl = !isDocument ? explicitFavicon || deriveFaviconUrl(source.url, proxyBase) : null
   const showFavicon = faviconUrl && !faviconError
   const initial = displaySiteName.charAt(0).toUpperCase()
   const badgeColor = getBadgeColor(displaySiteName)
 
   const handleClick = (e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault()
-    if (safeUrl === '#') {
+    if (isDocument) {
+      const meta = source.documentMeta!
+      const sideviewId =
+        meta.pageNumber != null
+          ? `${meta.fileId}:${meta.fileName}:${meta.pageNumber}`
+          : `${meta.fileId}:${meta.fileName}`
+      showSideview('document', sideviewId)
       return
     }
+    if (safeUrl === '#') return
     openExternalLink(safeUrl)
   }
 
@@ -73,7 +83,7 @@ export const SourceCard = ({ source, className, proxyBase }: SourceCardProps) =>
             <span className="text-white text-[11px] font-normal leading-4">{initial}</span>
           </div>
         )}
-        <span className="text-xs text-muted-foreground leading-4">{displaySiteName}</span>
+        {displaySiteName && <span className="text-xs text-muted-foreground leading-4">{displaySiteName}</span>}
       </div>
     </a>
   )

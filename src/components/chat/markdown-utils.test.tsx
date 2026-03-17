@@ -14,6 +14,7 @@ import {
   ExternalLinkDialogProvider,
   markdownComponents,
 } from './markdown-utils'
+import { MemoizedMarkdown } from './memoized-markdown'
 
 beforeAll(async () => {
   await setupTestDatabase()
@@ -344,5 +345,83 @@ describe('citationMarkdownComponents (citation placeholders via context)', () =>
     expect(container.querySelectorAll('button')).toHaveLength(0)
     expect(container.textContent).toContain('Text')
     expect(container.textContent).toContain('more text')
+  })
+})
+
+describe('MemoizedMarkdown with citation context (full rendering path)', () => {
+  const renderMemoizedWithCitations = (content: string, citations: CitationMap) => {
+    const TestProvider = createTestProvider()
+    return render(
+      <CitationPopoverProvider>
+        <CitationContext.Provider value={citations}>
+          <MemoizedMarkdown id="test-msg" content={content} components={citationMarkdownComponents} />
+        </CitationContext.Provider>
+      </CitationPopoverProvider>,
+      {
+        wrapper: ({ children }) => (
+          <TestProvider>
+            <ContentViewProvider>
+              <ExternalLinkDialogProvider>{children}</ExternalLinkDialogProvider>
+            </ContentViewProvider>
+          </TestProvider>
+        ),
+      },
+    )
+  }
+
+  test('renders citation badge in a single paragraph', () => {
+    const citations: CitationMap = new Map([[0, makeSources('Nature')]])
+    const { container } = renderMemoizedWithCitations('Climate change is real {{CITE:0}}.', citations)
+
+    expect(container.textContent).not.toContain('{{CITE:0}}')
+    expect(container.querySelectorAll('button')).toHaveLength(1)
+    expect(container.querySelector('button')?.textContent).toContain('Nature')
+  })
+
+  test('renders multiple citations in a long paragraph', () => {
+    const citations: CitationMap = new Map([
+      [0, makeSources('Nature')],
+      [1, makeSources('NOAA')],
+    ])
+    const content =
+      'The lead supervisory authority coordinates the cooperation process under Article 60 {{CITE:0}}. ' +
+      'GDPR fines follow a two-tier structure and authorities consider factors such as nature and gravity {{CITE:1}}.'
+    const { container } = renderMemoizedWithCitations(content, citations)
+
+    expect(container.textContent).not.toContain('{{CITE:0}}')
+    expect(container.textContent).not.toContain('{{CITE:1}}')
+    const buttons = container.querySelectorAll('button')
+    expect(buttons).toHaveLength(2)
+    expect(buttons[0]?.textContent).toContain('Nature')
+    expect(buttons[1]?.textContent).toContain('NOAA')
+  })
+
+  test('renders loading badges during streaming (isLoading sources)', () => {
+    const loadingSource: CitationSource = { id: '1', title: '...', url: '', isPrimary: true, isLoading: true }
+    const citations: CitationMap = new Map([[0, [loadingSource]]])
+    const { container } = renderMemoizedWithCitations('Article 60 is important {{CITE:0}}.', citations)
+
+    expect(container.textContent).not.toContain('{{CITE:0}}')
+    // Loading badge renders as span with animated dots, not button
+    expect(container.querySelectorAll('button')).toHaveLength(0)
+    expect(container.querySelectorAll('[aria-label="Loading citation"]')).toHaveLength(1)
+  })
+
+  test('renders citations in list items', () => {
+    const citations: CitationMap = new Map([[0, makeSources('Reuters')]])
+    const { container } = renderMemoizedWithCitations('- Breaking news {{CITE:0}}', citations)
+
+    expect(container.textContent).not.toContain('{{CITE:0}}')
+    expect(container.querySelector('li')?.querySelector('button')).toBeTruthy()
+  })
+
+  test('renders citations after stripCodeBlockIndentation removes indentation', () => {
+    const citations: CitationMap = new Map([[0, makeSources('Nature')]])
+    // After stripCodeBlockIndentation, 4-space indent is removed
+    const content = 'Cross-border enforcement: Article 60 {{CITE:0}}'
+    const { container } = renderMemoizedWithCitations(content, citations)
+
+    expect(container.textContent).not.toContain('{{CITE:0}}')
+    expect(container.querySelectorAll('button')).toHaveLength(1)
   })
 })

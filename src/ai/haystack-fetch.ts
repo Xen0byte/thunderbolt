@@ -1,7 +1,7 @@
 import { getSettings } from '@/dal'
 import { getDb } from '@/db/database'
 import { fetch } from '@/lib/fetch'
-import type { HaystackDocumentMeta, SaveMessagesFunction, ThunderboltUIMessage } from '@/types'
+import type { HaystackDocumentMeta, HaystackReferenceMeta, SaveMessagesFunction, ThunderboltUIMessage } from '@/types'
 import { v7 as uuidv7 } from 'uuid'
 import { createUIMessageStream, createUIMessageStreamResponse } from 'ai'
 
@@ -27,12 +27,19 @@ export type DeepsetResultPayload = {
   answers: Array<{
     answer: string
     files: Array<{ id: string; name: string }>
+    meta?: {
+      _references?: Array<{
+        document_position: number
+        document_id: string
+      }>
+    }
   }>
   documents: Array<{
     id: string
     content: string
     score: number
     file: { id: string; name: string }
+    meta?: { page_number?: number }
   }>
 }
 
@@ -89,12 +96,39 @@ export async function* parseSSE(body: ReadableStream<Uint8Array>): AsyncGenerato
 }
 
 /**
+ * Extracts citation references from a Deepset result by joining `_references`
+ * to their matching documents to resolve file info and page numbers.
+ * @internal Exported for testing only
+ */
+export const extractReferences = (result: DeepsetResultPayload): HaystackReferenceMeta[] => {
+  const refs = result.answers[0]?.meta?._references
+  if (!refs || refs.length === 0) return []
+
+  const docsById = new Map(result.documents.map((d) => [d.id, d]))
+
+  return refs.flatMap((ref) => {
+    const doc = docsById.get(ref.document_id)
+    if (!doc) return []
+    return [
+      {
+        position: ref.document_position,
+        fileId: doc.file.id,
+        fileName: doc.file.name,
+        pageNumber: doc.meta?.page_number,
+      },
+    ]
+  })
+}
+
+/**
  * Format document widgets from Deepset result.
+ * When references are provided, only shows widgets for files actually cited.
  * Excludes low-relevance results (<1% score).
  * @internal Exported for testing only
  */
 export const formatDocumentWidgets = (
   result: DeepsetResultPayload,
+  references?: HaystackReferenceMeta[],
 ): { widgets: string; documentsMeta: HaystackDocumentMeta[] } => {
   const answer = result?.answers[0]
   const docsByFileId = new Map<string, DeepsetResultPayload['documents'][0]>()
@@ -102,8 +136,11 @@ export const formatDocumentWidgets = (
     if (!docsByFileId.has(d.file.id)) docsByFileId.set(d.file.id, d)
   }
 
+  const citedFileIds = references && references.length > 0 ? new Set(references.map((r) => r.fileId)) : null
+
   const widgetTags = (answer?.files ?? [])
     .flatMap((file) => {
+      if (citedFileIds && !citedFileIds.has(file.id)) return []
       const doc = docsByFileId.get(file.id)
       if (!doc || doc.score < 0.01) return []
       const snippet = doc.content ? doc.content.slice(0, 200).replace(/"/g, '&quot;') : ''
@@ -122,6 +159,52 @@ export const formatDocumentWidgets = (
   }))
 
   return { widgets: widgetTags, documentsMeta }
+}
+
+type StreamWriter = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  write: (data: any) => void
+}
+
+/**
+ * Processes parsed SSE events, writing deltas and metadata to the stream writer.
+ * Emits `message-metadata` with `haystackReferences` immediately when the result
+ * event arrives, so the UI can render inline citations during streaming — not just
+ * after the stream finishes.
+ * @internal Exported for testing only
+ */
+export const processSSEEvents = async (
+  events: AsyncGenerator<DeepsetSSEEvent>,
+  writer: StreamWriter,
+  textPartId: string,
+): Promise<{ references: HaystackReferenceMeta[]; documents: HaystackDocumentMeta[] }> => {
+  let documents: HaystackDocumentMeta[] = []
+  let references: HaystackReferenceMeta[] = []
+
+  for await (const event of events) {
+    if (event.type === 'delta') {
+      writer.write({ type: 'text-delta', id: textPartId, delta: event.delta })
+    }
+    if (event.type === 'result') {
+      references = extractReferences(event.result)
+
+      // Push references to client immediately so citations render during streaming
+      if (references.length > 0) {
+        writer.write({ type: 'message-metadata', messageMetadata: { haystackReferences: references } })
+      }
+
+      const { widgets, documentsMeta } = formatDocumentWidgets(event.result, references)
+      if (widgets) {
+        writer.write({ type: 'text-delta', id: textPartId, delta: '\n\n' + widgets })
+      }
+      documents = documentsMeta
+    }
+    if (event.type === 'error') {
+      writer.write({ type: 'error', errorText: event.error })
+    }
+  }
+
+  return { references, documents }
 }
 
 /**
@@ -166,11 +249,10 @@ export const haystackFetchStreamingResponse = async ({
     generateId: uuidv7,
     execute: async ({ writer }) => {
       const textPartId = uuidv7()
-      let documents: HaystackDocumentMeta[] = []
 
       // Write start immediately (before any await) so the SDK creates the
       // assistant message and shows the loading spinner during async setup.
-      writer.write({ type: 'start', messageMetadata: { modelId } })
+      writer.write({ type: 'start', messageMetadata: { modelId, isDocumentSearch: true } })
 
       const db = getDb()
       const [, sessionId, { cloudUrl }] = await Promise.all([
@@ -195,27 +277,17 @@ export const haystackFetchStreamingResponse = async ({
 
       writer.write({ type: 'text-start', id: textPartId })
 
-      for await (const event of parseSSE(sseResponse.body)) {
-        if (event.type === 'delta') {
-          writer.write({ type: 'text-delta', id: textPartId, delta: event.delta })
-        }
-        if (event.type === 'result') {
-          const { widgets, documentsMeta } = formatDocumentWidgets(event.result)
-          if (widgets) {
-            writer.write({ type: 'text-delta', id: textPartId, delta: '\n\n' + widgets })
-          }
-          documents = documentsMeta
-        }
-        if (event.type === 'error') {
-          writer.write({ type: 'error', errorText: event.error })
-        }
-      }
+      const { references, documents } = await processSSEEvents(parseSSE(sseResponse.body), writer, textPartId)
 
       writer.write({ type: 'text-end', id: textPartId })
       writer.write({
         type: 'finish',
         finishReason: 'stop',
-        messageMetadata: { modelId, haystackDocuments: documents },
+        messageMetadata: {
+          modelId,
+          haystackDocuments: documents,
+          ...(references.length > 0 && { haystackReferences: references }),
+        },
       })
     },
   })
