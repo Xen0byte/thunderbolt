@@ -1,7 +1,7 @@
 import { encrypt, decrypt, getCK } from '@/crypto'
+import { decodeIfBase64 } from '@/lib/base64'
 
 const encPrefix = '__enc:'
-const legacyB64Prefix = 'b64:'
 
 export type EncryptionCodec = {
   encode: (plaintext: string) => Promise<string>
@@ -9,8 +9,7 @@ export type EncryptionCodec = {
 }
 
 // =============================================================================
-// CK cache — lazy-loaded from IndexedDB, invalidated on sign-out/wipe.
-// Works in both main thread and SharedWorker (both have indexedDB access).
+// CK cache — lazy-loaded from IndexedDB, invalidated on sign-out/wipe
 // =============================================================================
 
 let cachedCK: CryptoKey | null = null
@@ -66,16 +65,7 @@ export const codec: EncryptionCodec = {
       }
     }
 
-    // Legacy base64 format: b64:<base64> (backward compat with 6.1 PoC data)
-    if (encoded.startsWith(legacyB64Prefix)) {
-      try {
-        return decodeURIComponent(escape(atob(encoded.slice(legacyB64Prefix.length))))
-      } catch {
-        return encoded
-      }
-    }
-
-    // No recognized prefix — return as-is (plaintext)
-    return encoded
+    // Legacy base64 format: b64:<base64>
+    return decodeIfBase64(encoded)
   },
 }
