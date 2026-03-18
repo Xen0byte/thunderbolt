@@ -59,3 +59,13 @@ export { SyncState, disableSync, enableSync, getSyncState, onSyncEnabled } from 
 // Migration
 export type { MigrationStatus } from './migration'
 export { migrateLocalData } from './migration'
+
+// Phase 3 stubs — user key pair
+export { generateUserKeyPair, getUserPrivateKey, getUserPublicKey } from './user-key-pair'
+
+// Phase 3 stubs — content sharing
+export type { RecipientEnvelope, SharedEncryptedRecord } from './sharing'
+export { decryptFromSender, encryptForRecipients } from './sharing'
+
+// Phase 3 stubs — passkey guard
+export { lockSession, registerPasskey, unlockWithPasskey } from './passkey-guard'
