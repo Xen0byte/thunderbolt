@@ -113,7 +113,9 @@ const syncSetupReducer = (state: SyncSetupState, action: SyncSetupAction): SyncS
 }
 
 const getErrorMessage = (result: KeySetupResult): string => {
-  if (result.success) return ''
+  if (result.success) {
+    return ''
+  }
   switch (result.error) {
     case 'WRONG_KEY':
       return 'Incorrect passphrase. Please try again.'
@@ -146,11 +148,15 @@ export const useSyncSetupState = () => {
       dispatch({ type: 'SET_VERIFYING', payload: true })
       try {
         const { recoveryKey } = await createNewKey()
-        if (abortRef.current) return
+        if (abortRef.current) {
+          return
+        }
         dispatch({ type: 'SET_PASSPHRASE', payload: '' })
         dispatch({ type: 'SHOW_KEY', payload: recoveryKey })
       } catch {
-        if (abortRef.current) return
+        if (abortRef.current) {
+          return
+        }
         dispatch({ type: 'SET_ERROR', payload: 'Failed to generate encryption key. Please try again.' })
       }
     },
@@ -159,11 +165,15 @@ export const useSyncSetupState = () => {
       dispatch({ type: 'SET_VERIFYING', payload: true })
       try {
         const { recoveryKey } = await createNewKey(passphrase)
-        if (abortRef.current) return
+        if (abortRef.current) {
+          return
+        }
         dispatch({ type: 'SET_PASSPHRASE', payload: passphrase })
         dispatch({ type: 'SHOW_KEY', payload: recoveryKey })
       } catch {
-        if (abortRef.current) return
+        if (abortRef.current) {
+          return
+        }
         dispatch({ type: 'SET_ERROR', payload: 'Failed to generate encryption key. Please try again.' })
       }
     },
@@ -179,14 +189,18 @@ export const useSyncSetupState = () => {
       dispatch({ type: 'SET_VERIFYING', payload: true })
       try {
         const result = await importFromPassphrase(passphrase)
-        if (abortRef.current) return
+        if (abortRef.current) {
+          return
+        }
         if (result.success) {
           dispatch({ type: 'VERIFY_SUCCESS' })
         } else {
           dispatch({ type: 'SET_ERROR', payload: getErrorMessage(result) })
         }
       } catch {
-        if (abortRef.current) return
+        if (abortRef.current) {
+          return
+        }
         dispatch({ type: 'SET_ERROR', payload: 'Verification failed. Please try again.' })
       }
     },

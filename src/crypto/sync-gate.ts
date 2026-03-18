@@ -11,13 +11,13 @@ export type SyncState = (typeof syncStates)[keyof typeof syncStates]
 export type EnableSyncResult = { status: 'ENABLED' } | { status: 'REQUIRES_KEY_SETUP' }
 
 // Must match the key used by PowerSync's setSyncEnabled/isSyncEnabled
-const SYNC_ENABLED_KEY = 'powersync_sync_enabled'
+const syncEnabledKey = 'powersync_sync_enabled'
 
 let _onSyncEnabledCallbacks: Array<() => void> = []
 
 /** Returns the current sync state. Synchronous. */
 export const getSyncState = (): SyncState => {
-  const stored = keyStorage.get(SYNC_ENABLED_KEY)
+  const stored = keyStorage.get(syncEnabledKey)
   return stored === 'true' ? syncStates.ENABLED : syncStates.DISABLED
 }
 
@@ -31,14 +31,14 @@ export const enableSync = (): EnableSyncResult => {
   if (state === keyStates.NO_KEY) {
     return { status: 'REQUIRES_KEY_SETUP' }
   }
-  keyStorage.set(SYNC_ENABLED_KEY, 'true')
+  keyStorage.set(syncEnabledKey, 'true')
   _onSyncEnabledCallbacks.forEach((cb) => cb())
   return { status: 'ENABLED' }
 }
 
 /** Disable sync. Does NOT delete the key. */
 export const disableSync = (): void => {
-  keyStorage.set(SYNC_ENABLED_KEY, 'false')
+  keyStorage.set(syncEnabledKey, 'false')
 }
 
 /** Register a callback to be invoked when sync transitions to ENABLED. */
