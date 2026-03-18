@@ -1,3 +1,5 @@
+import { getAuthToken } from '@/lib/auth-token'
+import { defaultSettingCloudUrl } from '@/defaults/settings'
 import { createCanary, verifyCanary } from './canary'
 import type { KeyCanary } from './canary'
 import { ValidationError } from './errors'
@@ -5,10 +7,50 @@ import { decodeRecoveryKey, deriveKeyFromPassphrase, encodeRecoveryKey, generate
 import { keyStorage } from './key-storage'
 import { getSalt, setMasterKey, setSalt } from './master-key'
 import { exportKeyBytes, generateMasterKey, importKeyBytes } from './primitives'
+import { toBase64 } from './utils'
 
 export type KeySetupResult =
   | { success: true }
   | { success: false; error: 'WRONG_KEY' | 'INVALID_FORMAT' | 'SERVER_ERROR' | 'NETWORK_ERROR' }
+
+const getBackendUrl = (): string => defaultSettingCloudUrl.value
+
+const apiHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const token = getAuthToken()
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return headers
+}
+
+/** Upload canary + salt to server. Best-effort — failures don't block key creation. */
+const uploadEncryptionSetup = async (canary: KeyCanary, salt?: Uint8Array): Promise<void> => {
+  try {
+    await fetch(`${getBackendUrl()}/v1/encryption/setup`, {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ canary, salt: salt ? toBase64(salt) : undefined }),
+    })
+  } catch {
+    // Best-effort — import flows fall back to localStorage
+  }
+}
+
+/** Fetch canary + salt from server. Returns null if unavailable. */
+const fetchEncryptionSetup = async (): Promise<{ canary: KeyCanary; salt: string | null } | null> => {
+  try {
+    const response = await fetch(`${getBackendUrl()}/v1/encryption/setup`, {
+      headers: apiHeaders(),
+    })
+    if (!response.ok) {
+      return null
+    }
+    return await response.json()
+  } catch {
+    return null
+  }
+}
 
 /**
  * Create a brand-new master key.
@@ -18,9 +60,10 @@ export type KeySetupResult =
  */
 export const createNewKey = async (passphrase?: string): Promise<{ result: KeySetupResult; recoveryKey: string }> => {
   let masterKey: CryptoKey
+  let salt: Uint8Array | undefined
 
   if (passphrase) {
-    const salt = generateSalt()
+    salt = generateSalt()
     masterKey = await deriveKeyFromPassphrase(passphrase, salt)
     setSalt(salt)
   } else {
@@ -31,11 +74,9 @@ export const createNewKey = async (passphrase?: string): Promise<{ result: KeySe
   await setMasterKey(keyBytes)
 
   const canary = await createCanary(masterKey)
-  // Store canary locally for verification on import flows
   keyStorage.set('thunderbolt_enc_canary', JSON.stringify(canary))
 
-  // TODO: Upload { canary, salt } to server when backend endpoints exist
-  // await api.post('/api/encryption/setup', { canary, salt: salt ? toBase64(salt) : '' })
+  await uploadEncryptionSetup(canary, salt)
 
   const recoveryKey = encodeRecoveryKey(keyBytes)
   return { result: { success: true }, recoveryKey }
@@ -43,23 +84,23 @@ export const createNewKey = async (passphrase?: string): Promise<{ result: KeySe
 
 /**
  * Import a key by re-deriving from passphrase.
- * Fetches the salt from local storage (server fetch stubbed), derives the key, verifies canary.
+ * Tries server first for salt + canary, falls back to localStorage.
  */
 export const importFromPassphrase = async (passphrase: string): Promise<KeySetupResult> => {
-  // TODO: Fetch salt and canary from server when backend endpoints exist
-  // const { salt, canary } = await api.get('/api/encryption/setup')
-  const salt = getSalt()
-  if (!salt) {
+  // Try server first, fall back to localStorage
+  const serverSetup = await fetchEncryptionSetup()
+
+  const saltBytes = serverSetup?.salt ? Uint8Array.from(atob(serverSetup.salt), (c) => c.charCodeAt(0)) : getSalt()
+  if (!saltBytes) {
     return { success: false, error: 'WRONG_KEY' }
   }
 
-  const canaryJson = keyStorage.get('thunderbolt_enc_canary')
-  if (!canaryJson) {
+  const canary: KeyCanary | null = serverSetup?.canary ?? getLocalCanary()
+  if (!canary) {
     return { success: false, error: 'WRONG_KEY' }
   }
 
-  const canary: KeyCanary = JSON.parse(canaryJson)
-  const masterKey = await deriveKeyFromPassphrase(passphrase, salt)
+  const masterKey = await deriveKeyFromPassphrase(passphrase, saltBytes)
   const isValid = await verifyCanary(masterKey, canary)
 
   if (!isValid) {
@@ -68,13 +109,14 @@ export const importFromPassphrase = async (passphrase: string): Promise<KeySetup
 
   const keyBytes = await exportKeyBytes(masterKey)
   await setMasterKey(keyBytes)
-  setSalt(salt)
+  setSalt(saltBytes)
+  keyStorage.set('thunderbolt_enc_canary', JSON.stringify(canary))
   return { success: true }
 }
 
 /**
  * Import a key from a 64-char hex recovery key.
- * Decodes hex, imports key, verifies canary against stored canary.
+ * Decodes hex, imports key, verifies canary against server or local canary.
  */
 export const importFromRecoveryKey = async (hexKey: string): Promise<KeySetupResult> => {
   let keyBytes: Uint8Array
@@ -89,21 +131,29 @@ export const importFromRecoveryKey = async (hexKey: string): Promise<KeySetupRes
 
   const masterKey = await importKeyBytes(keyBytes, true)
 
-  const canaryJson = keyStorage.get('thunderbolt_enc_canary')
-  if (!canaryJson) {
-    // No canary stored — first import, just store the key
+  const serverSetup = await fetchEncryptionSetup()
+  const canary: KeyCanary | null = serverSetup?.canary ?? getLocalCanary()
+
+  if (!canary) {
+    // No canary anywhere — first import, just store the key
     await setMasterKey(keyBytes)
-    const canary = await createCanary(masterKey)
-    keyStorage.set('thunderbolt_enc_canary', JSON.stringify(canary))
+    const newCanary = await createCanary(masterKey)
+    keyStorage.set('thunderbolt_enc_canary', JSON.stringify(newCanary))
+    await uploadEncryptionSetup(newCanary)
     return { success: true }
   }
 
-  const canary: KeyCanary = JSON.parse(canaryJson)
   const isValid = await verifyCanary(masterKey, canary)
   if (!isValid) {
     return { success: false, error: 'WRONG_KEY' }
   }
 
   await setMasterKey(keyBytes)
+  keyStorage.set('thunderbolt_enc_canary', JSON.stringify(canary))
   return { success: true }
+}
+
+const getLocalCanary = (): KeyCanary | null => {
+  const json = keyStorage.get('thunderbolt_enc_canary')
+  return json ? JSON.parse(json) : null
 }
