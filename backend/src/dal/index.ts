@@ -12,3 +12,6 @@ export { getWaitlistByEmail, createWaitlistEntry, approveWaitlistEntry } from '.
 
 // PowerSync
 export { applyOperation } from './powersync'
+
+// Encryption
+export { getEncryptionSetup, upsertEncryptionSetup } from './encryption'
