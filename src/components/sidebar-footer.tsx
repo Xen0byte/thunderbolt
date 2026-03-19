@@ -226,13 +226,13 @@ export const SidebarFooter = ({ className }: SidebarFooterProps) => {
 
       <PopoverContent
         side="top"
-        sideOffset={8}
-        align="start"
-        collisionPadding={8}
+        sideOffset={5}
+        align={isMobile ? 'center' : 'start'}
+        collisionPadding={16}
         className={cn('p-0 rounded-2xl shadow-lg overflow-hidden', showBlur && 'z-[70]')}
         style={{
           width: isMobile
-            ? 'calc(100vw - 1rem)'
+            ? 'calc(100vw - 2rem)'
             : isDesktopCollapsed
               ? '16rem'
               : 'calc(var(--radix-popover-trigger-width) - 1rem)',
