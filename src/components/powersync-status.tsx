@@ -103,7 +103,7 @@ export const PowerSyncStatus = () => {
           align={isMobile ? 'center' : 'end'}
           side="bottom"
           sideOffset={5}
-          collisionPadding={16}
+          collisionPadding={isMobile ? 16 : 0}
           className={cn('rounded-2xl shadow-lg duration-100', isMobile && popoverOpen && 'z-50')}
           style={{ width: isMobile ? 'calc(100vw - 2rem)' : undefined }}
         >
