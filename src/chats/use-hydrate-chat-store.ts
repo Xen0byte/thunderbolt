@@ -139,34 +139,8 @@ export const useHydrateChatStore = ({ id, isNew }: UseHydrateChatStoreParams) =>
       saveMessages,
     )
 
-    // Initialize ACP connection with built-in agent (Phase 1)
-    const { clientStream, agentStream } = createInProcessStream()
-    const agentHandler = createBuiltInAgentHandler({
-      modes,
-      models,
-      runInference: createBuiltInInference(),
-    })
-
-    const { connection } = createAcpClient({
-      stream: clientStream,
-      agentStream,
-      agentHandler,
-      onSessionUpdate: () => {
-        // Phase 1: session updates are handled by the Chat instance.
-        // Future phases will route updates to the UI directly.
-      },
-    })
-
-    await connection.initialize({ protocolVersion: 1 })
-    const acpNewSession = await connection.newSession({ cwd: '/', mcpServers: [] })
-
     createSession({
-      acpSession: {
-        sessionId: acpNewSession.sessionId,
-        modes: acpNewSession.modes ?? null,
-        configOptions: acpNewSession.configOptions ?? null,
-        connection,
-      },
+      acpSession: null,
       chatInstance,
       chatThread,
       id,
@@ -184,6 +158,37 @@ export const useHydrateChatStore = ({ id, isNew }: UseHydrateChatStoreParams) =>
     setModels(models)
 
     setIsReady(true)
+
+    // Initialize ACP connection after render is unblocked (Phase 1).
+    // This runs asynchronously so it doesn't delay the initial chat render.
+    const { clientStream, agentStream } = createInProcessStream()
+    const agentHandler = createBuiltInAgentHandler({
+      modes,
+      models,
+      runInference: createBuiltInInference(),
+    })
+
+    const connection = createAcpClient({
+      stream: clientStream,
+      agentStream,
+      agentHandler,
+      onSessionUpdate: () => {},
+    })
+
+    connection.initialize({ protocolVersion: 1 }).then(async () => {
+      const acpNewSession = await connection.newSession({ cwd: '/', mcpServers: [] })
+      const { updateSession, sessions } = useChatStore.getState()
+      if (sessions.has(id)) {
+        updateSession(id, {
+          acpSession: {
+            sessionId: acpNewSession.sessionId,
+            modes: acpNewSession.modes ?? null,
+            configOptions: acpNewSession.configOptions ?? null,
+            connection,
+          },
+        })
+      }
+    })
   }
 
   return { hydrateChatStore, isReady, saveMessages }

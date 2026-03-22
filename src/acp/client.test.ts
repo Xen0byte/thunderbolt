@@ -1,68 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { SessionUpdate } from '@agentclientprotocol/sdk'
-import type { Mode, Model } from '@/types'
 import { createInProcessStream } from './streams'
 import { createBuiltInAgentHandler } from './built-in-agent'
 import { createAcpClient } from './client'
-import type { InferenceEvent, RunInference } from './types'
-
-const testModes: Mode[] = [
-  {
-    id: 'mode-chat',
-    name: 'chat',
-    label: 'Chat',
-    icon: 'message-square',
-    systemPrompt: 'You are a chat assistant',
-    isDefault: 1,
-    order: 0,
-    deletedAt: null,
-    defaultHash: null,
-    userId: null,
-  },
-  {
-    id: 'mode-search',
-    name: 'search',
-    label: 'Search',
-    icon: 'globe',
-    systemPrompt: null,
-    isDefault: 0,
-    order: 1,
-    deletedAt: null,
-    defaultHash: null,
-    userId: null,
-  },
-]
-
-const testModels: Model[] = [
-  {
-    id: 'model-sonnet',
-    name: 'Claude Sonnet',
-    provider: 'anthropic',
-    model: 'claude-sonnet-4-5-20250514',
-    enabled: 1,
-    toolUsage: 1,
-    isConfidential: 0,
-    startWithReasoning: 0,
-    supportsParallelToolCalls: 1,
-    vendor: null,
-    apiKey: null,
-    url: null,
-    contextWindow: null,
-    isSystem: null,
-    defaultHash: null,
-    deletedAt: null,
-    userId: null,
-    description: null,
-  },
-]
-
-const createMockInference = (events: InferenceEvent[]): RunInference => {
-  return async function* () {
-    for (const event of events) {
-      yield event
-    }
-  }
-}
+import { createMockInference, testModes, testModels } from './test-fixtures'
+import type { InferenceEvent } from './types'
 
 /**
  * Creates a full test setup: in-process streams + built-in agent + ACP client.
@@ -83,7 +25,7 @@ const createFullTestSetup = (options?: { events?: InferenceEvent[] }) => {
 
   const receivedUpdates: SessionUpdate[] = []
 
-  const { connection, agentConnection } = createAcpClient({
+  const connection = createAcpClient({
     stream: clientStream,
     agentStream,
     agentHandler,
@@ -92,7 +34,7 @@ const createFullTestSetup = (options?: { events?: InferenceEvent[] }) => {
     },
   })
 
-  return { connection, agentConnection, receivedUpdates }
+  return { connection, receivedUpdates }
 }
 
 describe('createAcpClient', () => {
@@ -115,7 +57,7 @@ describe('createAcpClient', () => {
 
     expect(session.sessionId).toBeTruthy()
     expect(session.modes).toBeTruthy()
-    expect(session.modes!.availableModes).toHaveLength(2)
+    expect(session.modes!.availableModes).toHaveLength(3)
     expect(session.configOptions).toBeTruthy()
   })
 

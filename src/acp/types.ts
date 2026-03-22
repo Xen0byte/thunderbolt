@@ -56,11 +56,6 @@ export type BuiltInAgentConfig = {
 
 export type SessionUpdateHandler = (update: SessionUpdate) => void
 
-export type AcpClientOptions = {
-  stream: Stream
-  onSessionUpdate: SessionUpdateHandler
-}
-
 export type AcpSessionInfo = {
   sessionId: string
   modes: SessionModeState | null
