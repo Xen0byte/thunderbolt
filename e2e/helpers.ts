@@ -18,6 +18,15 @@ export const loginViaOidc = async (page: Page) => {
 }
 
 /**
+ * Navigate to new chat page and wait for full render.
+ */
+export const goToNewChat = async (page: Page) => {
+  await page.goto('/chats/new')
+  // Wait for the agent selector in the header to appear (proves DB is initialized)
+  await page.waitForTimeout(3000)
+}
+
+/**
  * Collect uncaught JS errors, filtering Tauri-specific noise.
  */
 export const collectPageErrors = (page: Page): string[] => {
