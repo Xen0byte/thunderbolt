@@ -1,7 +1,29 @@
 import { useChatStore } from '@/chats/chat-store'
-import type { AutomationRun, ChatThread, Mode, Model, ThunderboltUIMessage } from '@/types'
+import type { Agent, AutomationRun, ChatThread, Mode, Model, ThunderboltUIMessage } from '@/types'
 import { type Chat } from '@ai-sdk/react'
 import { mock } from 'bun:test'
+
+/**
+ * Creates a mock Agent for testing
+ */
+export const createMockAgent = (overrides?: Partial<Agent>): Agent =>
+  ({
+    id: 'agent-built-in',
+    name: 'Built-in',
+    type: 'built-in',
+    transport: 'in-process',
+    enabled: 1,
+    isSystem: 1,
+    command: null,
+    args: null,
+    url: null,
+    authMethod: null,
+    icon: 'bot',
+    deletedAt: null,
+    userId: null,
+    defaultHash: null,
+    ...overrides,
+  }) as Agent
 
 /**
  * Creates a mock Mode for testing
@@ -177,20 +199,47 @@ const defaultTestModel: Model = {
 } as Model
 
 /**
+ * Default agent used when selectedAgent is null but a session needs to be created
+ */
+const defaultTestAgent: Agent = {
+  id: 'agent-built-in',
+  name: 'Built-in',
+  type: 'built-in',
+  transport: 'in-process',
+  enabled: 1,
+  isSystem: 1,
+  command: null,
+  args: null,
+  url: null,
+  authMethod: null,
+  icon: 'bot',
+  deletedAt: null,
+  userId: null,
+  defaultHash: null,
+} as Agent
+
+/**
  * Hydrates the store with a session for testing
  */
 export const hydrateStore = (state: {
+  agents?: Agent[]
   chatInstance: Chat<ThunderboltUIMessage> | null
   chatThread: ChatThread | null
   id: string
   mcpClients?: unknown[]
   modes?: Mode[]
   models?: Model[]
+  selectedAgent?: Agent | null
   selectedMode?: Mode | null
   selectedModel: Model | null
   triggerData: AutomationRun | null
 }) => {
   const store = useChatStore.getState()
+
+  // Set agents
+  if (state.agents) {
+    store.setAgents(state.agents)
+  }
 
   // Set modes first (needed for setSelectedMode)
   if (state.modes) {
@@ -216,6 +265,7 @@ export const hydrateStore = (state: {
       id: state.id,
       retryCount: 0,
       retriesExhausted: false,
+      selectedAgent: state.selectedAgent ?? defaultTestAgent,
       selectedMode: state.selectedMode ?? defaultTestMode,
       selectedModel: state.selectedModel ?? defaultTestModel,
       triggerData: state.triggerData,
@@ -236,6 +286,7 @@ export const hydrateStore = (state: {
  */
 export const resetStore = () => {
   useChatStore.setState({
+    agents: [],
     currentSessionId: null,
     mcpClients: [],
     modes: [],

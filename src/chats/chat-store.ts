@@ -3,7 +3,7 @@ import { updateSettings } from '@/dal'
 import { getDb } from '@/db/database'
 import { type MCPClient } from '@/lib/mcp-provider'
 import { trackEvent } from '@/lib/posthog'
-import type { AutomationRun, ChatThread, Mode, Model, ThunderboltUIMessage } from '@/types'
+import type { Agent, AutomationRun, ChatThread, Mode, Model, ThunderboltUIMessage } from '@/types'
 import { create } from 'zustand'
 import type { Chat } from '@ai-sdk/react'
 import { useShallow } from 'zustand/react/shallow'
@@ -15,12 +15,14 @@ type ChatSession = {
   id: string
   retryCount: number
   retriesExhausted: boolean
+  selectedAgent: Agent | null
   selectedMode: Mode
   selectedModel: Model
   triggerData: AutomationRun | null
 }
 
 type ChatStoreState = {
+  agents: Agent[]
   currentSessionId: string | null
   mcpClients: MCPClient[]
   modes: Mode[]
@@ -30,10 +32,12 @@ type ChatStoreState = {
 
 type ChatStoreActions = {
   createSession(session: ChatSession): void
+  setAgents(agents: Agent[]): void
   setCurrentSessionId(id: string): void
   setMcpClients(mcpClients: MCPClient[]): void
   setModes(modes: Mode[]): void
   setModels(models: Model[]): void
+  setSelectedAgent(id: string, agentId: string | null): Promise<void>
   setSelectedMode(id: string, modeId: string | null): Promise<void>
   setSelectedModel(id: string, modelId: string | null): Promise<void>
   updateSession(id: string, session: Partial<Omit<ChatSession, 'id'>>): void
@@ -42,6 +46,7 @@ type ChatStoreActions = {
 type ChatStore = ChatStoreState & ChatStoreActions
 
 const initialState: ChatStoreState = {
+  agents: [],
   currentSessionId: null,
   mcpClients: [],
   modes: [],
@@ -65,6 +70,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     set({ sessions: nextSessions })
   },
 
+  setAgents: (agents) => {
+    set({ agents })
+  },
+
   setCurrentSessionId: (id) => {
     set({ currentSessionId: id })
   },
@@ -79,6 +88,32 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
   setModels: (models) => {
     set({ models })
+  },
+
+  setSelectedAgent: async (id, agentId) => {
+    const { agents, sessions } = get()
+
+    const agent = agents.find((a) => a.id === agentId)
+
+    if (!agent) {
+      throw new Error('Agent not found')
+    }
+
+    const session = sessions.get(id)
+
+    if (!session) {
+      throw new Error('No session found')
+    }
+
+    const nextSessions = new Map(sessions)
+    nextSessions.set(id, { ...session, selectedAgent: agent })
+
+    set({ sessions: nextSessions })
+
+    const db = getDb()
+    await updateSettings(db, { selected_agent: agent.id })
+
+    trackEvent('agent_select', { agent: agent.id })
   },
 
   setSelectedMode: async (id, modeId) => {

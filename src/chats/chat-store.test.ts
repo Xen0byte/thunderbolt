@@ -3,6 +3,7 @@ import { setupTestDatabase, teardownTestDatabase, resetTestDatabase } from '@/da
 import { getDb } from '@/db/database'
 import type { Mode } from '@/types'
 import {
+  createMockAgent,
   createMockAutomationRun,
   createMockChatInstanceWithValidation,
   createMockChatThread,
@@ -316,6 +317,91 @@ describe('chat-store', () => {
 
       const session = getCurrentSession()
       expect(session?.selectedModel?.id).toBe('tracked-model')
+    })
+  })
+
+  describe('setSelectedAgent', () => {
+    it('should throw error when agent is not found', async () => {
+      const agent1 = createMockAgent({ id: 'agent-1' })
+      const model = createMockModel()
+
+      hydrateStore({
+        chatInstance: createMockChatInstanceWithValidation(),
+        chatThread: null,
+        id: 'test-id',
+        mcpClients: [],
+        agents: [agent1],
+        models: [model],
+        selectedAgent: agent1,
+        selectedModel: model,
+        triggerData: null,
+      })
+
+      await expect(useChatStore.getState().setSelectedAgent('test-id', 'nonexistent-agent')).rejects.toThrow(
+        'Agent not found',
+      )
+    })
+
+    it('should set selected agent and update settings', async () => {
+      const agent1 = createMockAgent({ id: 'agent-1', name: 'Agent 1' })
+      const agent2 = createMockAgent({ id: 'agent-2', name: 'Agent 2', type: 'local', transport: 'stdio' })
+      const model = createMockModel()
+
+      hydrateStore({
+        chatInstance: createMockChatInstanceWithValidation(),
+        chatThread: null,
+        id: 'test-id',
+        mcpClients: [],
+        agents: [agent1, agent2],
+        models: [model],
+        selectedAgent: agent1,
+        selectedModel: model,
+        triggerData: null,
+      })
+
+      await useChatStore.getState().setSelectedAgent('test-id', 'agent-2')
+
+      const session = getCurrentSession()
+      expect(session?.selectedAgent).toBe(agent2)
+      expect(session?.selectedAgent?.id).toBe('agent-2')
+
+      const settings = await getSettings(getDb(), { selected_agent: String })
+      expect(settings.selectedAgent).toBe('agent-2')
+    })
+
+    it('should throw error when session is not found', async () => {
+      const agent = createMockAgent()
+      useChatStore.getState().setAgents([agent])
+
+      await expect(useChatStore.getState().setSelectedAgent('nonexistent-session', 'agent-built-in')).rejects.toThrow(
+        'No session found',
+      )
+    })
+  })
+
+  describe('setAgents', () => {
+    it('should set agents in the store', () => {
+      const agent1 = createMockAgent({ id: 'agent-1' })
+      const agent2 = createMockAgent({ id: 'agent-2' })
+
+      useChatStore.getState().setAgents([agent1, agent2])
+
+      const { agents } = useChatStore.getState()
+      expect(agents).toHaveLength(2)
+      expect(agents[0]).toBe(agent1)
+      expect(agents[1]).toBe(agent2)
+    })
+
+    it('should replace existing agents', () => {
+      const agent1 = createMockAgent({ id: 'agent-1' })
+      const agent2 = createMockAgent({ id: 'agent-2' })
+
+      useChatStore.getState().setAgents([agent1])
+      useChatStore.getState().setAgents([agent2])
+
+      const { agents } = useChatStore.getState()
+      expect(agents).toHaveLength(1)
+      expect(agents[0]).toBe(agent2)
     })
   })
 })

@@ -4,11 +4,13 @@ import { createInProcessStream } from '@/acp/streams'
 import { createBuiltInInference } from '@/acp/built-in-inference'
 import { useDatabase } from '@/contexts'
 import {
+  getEnabledAgents,
   getAllModes,
   getAvailableModels,
   getChatMessages,
   getChatThread,
   getDefaultModelForThread,
+  getSelectedAgent,
   getSelectedMode,
   getSettings,
   getTriggerPromptForThread,
@@ -84,7 +86,8 @@ export const useHydrateChatStore = ({ id, isNew }: UseHydrateChatStoreParams) =>
   }
 
   const hydrateChatStore = async () => {
-    const { createSession, sessions, setCurrentSessionId, setMcpClients, setModes, setModels } = useChatStore.getState()
+    const { createSession, sessions, setAgents, setCurrentSessionId, setMcpClients, setModes, setModels } =
+      useChatStore.getState()
 
     // Check if this ID belongs to a deleted chat - redirect to 404 if so
     const isDeleted = await isChatThreadDeleted(db, id)
@@ -97,12 +100,14 @@ export const useHydrateChatStore = ({ id, isNew }: UseHydrateChatStoreParams) =>
     if (sessions.has(id)) {
       setCurrentSessionId(id)
 
-      const [modes, models, mcpClients] = await Promise.all([
+      const [agents, modes, models, mcpClients] = await Promise.all([
+        getEnabledAgents(db),
         getAllModes(db),
         getAvailableModels(db),
         getEnabledClients(),
       ])
 
+      setAgents(agents)
       setMcpClients(mcpClients)
       setModes(modes)
       setModels(models)
@@ -115,17 +120,29 @@ export const useHydrateChatStore = ({ id, isNew }: UseHydrateChatStoreParams) =>
     // If the session does not exist, create it below
     const settings = await getSettings(db, { selected_model: String })
 
-    const [defaultModel, selectedMode, chatThread, initialMessages, modes, models, triggerData, mcpClients] =
-      await Promise.all([
-        getDefaultModelForThread(db, id, settings.selectedModel ?? undefined),
-        getSelectedMode(db),
-        getChatThread(db, id),
-        getChatMessages(db, id),
-        getAllModes(db),
-        getAvailableModels(db),
-        getTriggerPromptForThread(db, id),
-        getEnabledClients(),
-      ])
+    const [
+      agents,
+      defaultModel,
+      selectedAgent,
+      selectedMode,
+      chatThread,
+      initialMessages,
+      modes,
+      models,
+      triggerData,
+      mcpClients,
+    ] = await Promise.all([
+      getEnabledAgents(db),
+      getDefaultModelForThread(db, id, settings.selectedModel ?? undefined),
+      getSelectedAgent(db),
+      getSelectedMode(db),
+      getChatThread(db, id),
+      getChatMessages(db, id),
+      getAllModes(db),
+      getAvailableModels(db),
+      getTriggerPromptForThread(db, id),
+      getEnabledClients(),
+    ])
 
     // If chat doesn't exist and this isn't a new chat, redirect to 404
     if (!chatThread && !isNew) {
@@ -146,6 +163,7 @@ export const useHydrateChatStore = ({ id, isNew }: UseHydrateChatStoreParams) =>
       id,
       retryCount: 0,
       retriesExhausted: false,
+      selectedAgent,
       selectedMode,
       selectedModel: defaultModel,
       triggerData,
@@ -153,6 +171,7 @@ export const useHydrateChatStore = ({ id, isNew }: UseHydrateChatStoreParams) =>
 
     setCurrentSessionId(id)
 
+    setAgents(agents)
     setMcpClients(mcpClients)
     setModes(modes)
     setModels(models)
