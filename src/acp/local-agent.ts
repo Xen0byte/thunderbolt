@@ -1,11 +1,5 @@
 import type { Agent } from '@/types'
-import type {
-  ClientSideConnection,
-  SessionConfigOption,
-  SessionModeState,
-  SessionUpdate,
-  Stream,
-} from '@agentclientprotocol/sdk'
+import type { ClientSideConnection, SessionConfigOption, SessionModeState, Stream } from '@agentclientprotocol/sdk'
 import type { SessionUpdateHandler } from './types'
 
 type StdioStreamResult = {
@@ -75,7 +69,7 @@ export const connectToLocalAgent = async (
   })
 
   const session = await connection.newSession({
-    cwd: process.cwd?.() ?? '.',
+    cwd: '.',
     mcpServers: [],
   })
 

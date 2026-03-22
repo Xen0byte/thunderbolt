@@ -92,12 +92,12 @@ describe('PermissionDialog', () => {
     const onSelect = mock()
     const request = createTestRequest({
       toolCall: createTestToolCall({
-        locations: [{ uri: 'file:///src/main.ts' }],
+        locations: [{ path: 'src/main.ts' }],
       }),
     })
     render(<PermissionDialog request={request} onSelect={onSelect} />)
 
-    expect(screen.getByText(/src\/main.ts/)).toBeInTheDocument()
+    expect(screen.getByText('src/main.ts')).toBeInTheDocument()
   })
 
   test('renders reject_always option', () => {

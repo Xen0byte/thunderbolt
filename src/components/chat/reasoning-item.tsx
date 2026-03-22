@@ -33,7 +33,7 @@ const getItemData = (part: ReasoningGroupItem, isGroupReasoning: boolean) => {
         const acpIcon = getToolKindIcon(kind)
         return {
           Icon: acpIcon || DotIcon,
-          displayName: getToolKindDisplayName(kind, toolPart.toolName),
+          displayName: getToolKindDisplayName(kind, toolPart.title),
           isLoading: isGroupReasoning && toolPart.state !== 'output-available' && toolPart.state !== 'output-error',
           duration: (toolPart as any).metadata?.duration,
         }

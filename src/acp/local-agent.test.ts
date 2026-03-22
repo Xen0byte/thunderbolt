@@ -1,12 +1,7 @@
-import { describe, expect, mock, test, beforeEach } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import type { Agent } from '@/types'
 import type { ClientSideConnection, SessionUpdate } from '@agentclientprotocol/sdk'
-import {
-  connectToLocalAgent,
-  disconnectLocalAgent,
-  type LocalAgentConnection,
-  type LocalAgentDependencies,
-} from './local-agent'
+import { connectToLocalAgent, disconnectLocalAgent, type LocalAgentDependencies } from './local-agent'
 
 const createTestAgent = (overrides?: Partial<Agent>): Agent => ({
   id: 'agent-local-claude',
@@ -209,7 +204,7 @@ describe('process exit handling', () => {
     const deps = createMockDeps()
     const agent = createTestAgent()
 
-    const result = await connectToLocalAgent(agent, deps)
+    await connectToLocalAgent(agent, deps)
 
     // The onClose should have been called to register a handler
     const mockProcess = (deps.createStdioStream as ReturnType<typeof mock>).mock.results[0].value.process

@@ -29,7 +29,7 @@ const getPermissionVariant = (kind: PermissionOption['kind']) => {
   }
 }
 
-const getToolKindIcon = (kind?: string) => {
+const getToolKindIcon = (kind?: string | null) => {
   switch (kind) {
     case 'edit':
     case 'delete':
@@ -42,7 +42,7 @@ const getToolKindIcon = (kind?: string) => {
   }
 }
 
-const extractFilePath = (uri: string): string => uri.replace('file://', '')
+const formatLocation = (path: string, line?: number | null): string => (line ? `${path}:${line}` : path)
 
 /**
  * Permission request dialog shown when an ACP agent needs user authorization
@@ -65,7 +65,7 @@ export const PermissionDialog = ({ request, onSelect }: PermissionDialogProps) =
         <div className="text-xs text-muted-foreground space-y-0.5">
           {toolCall.locations.map((loc, i) => (
             <div key={i} className="font-mono truncate">
-              {extractFilePath(loc.uri)}
+              {formatLocation(loc.path, loc.line)}
             </div>
           ))}
         </div>
