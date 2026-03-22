@@ -87,7 +87,9 @@ describe('discoverLocalAgents', () => {
 
   it('should handle commandExists throwing errors gracefully', async () => {
     const faultyChecker: CommandExistsChecker = async (command) => {
-      if (command === 'codex') throw new Error('Command check failed')
+      if (command === 'codex') {
+        throw new Error('Command check failed')
+      }
       return command === 'claude'
     }
 

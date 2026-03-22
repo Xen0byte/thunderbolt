@@ -41,16 +41,20 @@ export type CommandExistsChecker = (command: string) => Promise<boolean>
  * @returns Array of discovered agents (empty if none found or not on desktop)
  */
 export const discoverLocalAgents = async (commandExists: CommandExistsChecker): Promise<Agent[]> => {
-  const results = await Promise.all(
+  const agents: Agent[] = []
+
+  await Promise.all(
     knownCliAgents.map(async (known) => {
       const exists = await commandExists(known.command)
-      if (!exists) return null
+      if (!exists) {
+        return
+      }
 
-      return {
+      agents.push({
         id: `agent-local-${known.command}`,
         name: known.name,
-        type: 'local' as const,
-        transport: 'stdio' as const,
+        type: 'local',
+        transport: 'stdio',
         command: known.command,
         args: known.args,
         url: null,
@@ -61,9 +65,9 @@ export const discoverLocalAgents = async (commandExists: CommandExistsChecker): 
         deletedAt: null,
         userId: null,
         defaultHash: null,
-      } satisfies Agent
+      })
     }),
   )
 
-  return results.filter((agent): agent is Agent => agent !== null)
+  return agents
 }

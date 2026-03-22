@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import type { AnyDrizzleDatabase } from '../db/database-interface'
-import { agentsTable, settingsTable } from '../db/tables'
+import { agentsTable } from '../db/tables'
 import { clearNullableColumns, nowIso } from '../lib/utils'
 import type { Agent } from '@/types'
 import { getSettings } from './settings'

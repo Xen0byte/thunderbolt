@@ -3,8 +3,6 @@ import { agentsTable } from '@/db/tables'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
-import { defaultAgentBuiltIn } from '@/defaults/agents'
-import type { Agent } from '@/types'
 import {
   createAgent,
   deleteAgent,

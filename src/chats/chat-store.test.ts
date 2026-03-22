@@ -113,6 +113,7 @@ describe('chat-store', () => {
               chatInstance,
               chatThread: null,
               id: 'test-id',
+              selectedAgent: null,
               selectedMode: null as unknown as Mode,
               retryCount: 0,
               retriesExhausted: false,
