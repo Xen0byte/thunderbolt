@@ -36,11 +36,13 @@ export const setupDecryptionWatchers = async (powerSync: PowerSyncDatabase): Pro
     const destColumnList = srcColumnList
     const placeholders = ['id', ...dbNames].map(() => '?').join(', ')
 
-    const decodeRow = (row: Record<string, string | null>) =>
-      dbNames.map((dbName) => {
-        const val = row[dbName]
-        return val ? codec.decode(val) : val
-      })
+    const decodeRow = async (row: Record<string, string | null>) =>
+      Promise.all(
+        dbNames.map(async (dbName) => {
+          const val = row[dbName]
+          return val ? codec.decode(val) : val
+        }),
+      )
 
     const cleanup = await powerSync.triggers.trackTableDiff({
       source: srcTableName,
@@ -58,7 +60,7 @@ export const setupDecryptionWatchers = async (powerSync: PowerSyncDatabase): Pro
           for (const row of existing) {
             await ctx.execute(`INSERT OR REPLACE INTO ${destTableName} (${destColumnList}) VALUES (${placeholders})`, [
               row.id,
-              ...decodeRow(row),
+              ...(await decodeRow(row)),
             ])
           }
         },
@@ -73,7 +75,7 @@ export const setupDecryptionWatchers = async (powerSync: PowerSyncDatabase): Pro
           } else {
             await context.execute(
               `INSERT OR REPLACE INTO ${destTableName} (${destColumnList}) VALUES (${placeholders})`,
-              [diff.id, ...decodeRow(diff)],
+              [diff.id, ...(await decodeRow(diff))],
             )
           }
         }

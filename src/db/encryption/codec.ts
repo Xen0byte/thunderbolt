@@ -1,12 +1,39 @@
-import { encodeIfNotBase64, decodeIfBase64 } from '@/lib/base64'
+import { encrypt, decrypt, getCK } from '@/crypto'
+import { isEncryptionEnabled } from './enabled'
 
 export type EncryptionCodec = {
-  encode: (plaintext: string) => string
-  decode: (ciphertext: string) => string
+  encode: (plaintext: string) => Promise<string>
+  decode: (ciphertext: string) => Promise<string>
 }
 
-/** Base64 codec (PoC). Replace internals with AES-GCM when ready. */
+const encPrefix = '__enc:'
+
+/** AES-GCM codec using CK from IndexedDB. */
 export const codec: EncryptionCodec = {
-  encode: encodeIfNotBase64,
-  decode: decodeIfBase64,
+  encode: async (plaintext) => {
+    if (!isEncryptionEnabled()) {
+      return plaintext
+    }
+    const ck = await getCK()
+    if (!ck) {
+      return plaintext
+    }
+    const { iv, ciphertext } = await encrypt(plaintext, ck)
+    return `${encPrefix}${iv}:${ciphertext}`
+  },
+
+  decode: async (encoded) => {
+    if (!encoded.startsWith(encPrefix)) {
+      return encoded
+    }
+    const ck = await getCK()
+    if (!ck) {
+      return encoded
+    }
+    const payload = encoded.slice(encPrefix.length)
+    const separatorIdx = payload.indexOf(':')
+    const iv = payload.slice(0, separatorIdx)
+    const ciphertext = payload.slice(separatorIdx + 1)
+    return decrypt({ iv, ciphertext }, ck)
+  },
 }
