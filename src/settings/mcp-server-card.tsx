@@ -79,7 +79,10 @@ export const McpServerCard = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div>
-                  <StatusIndicator status={status as 'connected' | 'connecting' | 'disconnected'} size="md" />
+                  <StatusIndicator
+                    status={status === 'error' ? 'offline' : (status as 'connected' | 'connecting' | 'disconnected')}
+                    size="md"
+                  />
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom">

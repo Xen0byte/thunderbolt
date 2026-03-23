@@ -132,6 +132,7 @@ export const useMcpServersPageState = () => {
       url?: string
       command?: string
       args?: string
+      authType?: 'none' | 'bearer' | 'oauth'
     }) => {
       await createMcpServer(db, {
         id: uuidv7(),
@@ -224,20 +225,24 @@ export const useMcpServersPageState = () => {
   const handleAddServer = () => {
     if (!isValid()) return
 
+    const authType = formState.authType !== 'none' ? formState.authType : undefined
+
     if (formState.transportType === 'stdio') {
-      const name = `${formState.command} ${formState.args.join(' ')}`.trim()
+      const cleanArgs = formState.args.filter(Boolean)
+      const name = `${formState.command} ${cleanArgs.join(' ')}`.trim()
       addServerMutation.mutate({
         name,
         type: 'stdio',
         command: formState.command,
-        args: JSON.stringify(formState.args),
+        args: JSON.stringify(cleanArgs),
+        authType,
       })
       return
     }
 
     const url = new URL(formState.url)
     const name = `${url.hostname}${url.port ? `:${url.port}` : ''} MCP Server`
-    addServerMutation.mutate({ name, type: formState.transportType, url: formState.url })
+    addServerMutation.mutate({ name, type: formState.transportType, url: formState.url, authType })
   }
 
   const handleUrlKeyDown = (e: KeyboardEvent) => {
@@ -256,11 +261,8 @@ export const useMcpServersPageState = () => {
   }
 
   const handleArgsInput = (value: string) => {
-    const args = value
-      .split(' ')
-      .map((a) => a.trim())
-      .filter(Boolean)
-    formDispatch({ type: 'SET_ARGS', payload: args })
+    // Split on spaces but preserve trailing space so the user can type the next arg
+    formDispatch({ type: 'SET_ARGS', payload: value.split(' ') })
   }
 
   const getConnectionStatus = (server: McpServer) => {
