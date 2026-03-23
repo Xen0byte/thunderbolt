@@ -23,6 +23,8 @@ export const MCPProvider = ({ children }: { children: ReactNode }) => {
   const db = useDatabase()
   const [servers, setServers] = useState<McpServerConnection[]>([])
   const clientRefs = useRef<Map<string, McpClient>>(new Map())
+  const transportRefs = useRef<Map<string, { close(): Promise<void> }>>(new Map())
+  const retryTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const serversRef = useRef<McpServerConnection[]>([])
   const credentialStoreRef = useRef(createCredentialStore(db))
 
@@ -30,6 +32,7 @@ export const MCPProvider = ({ children }: { children: ReactNode }) => {
 
   const createClient = async (config: McpServerConfig): Promise<McpClient> => {
     const { transport } = await createTransport(config, credentialStoreRef.current)
+    transportRefs.current.set(config.id, transport)
     return await createMCPClient({ transport })
   }
 
@@ -57,7 +60,11 @@ export const MCPProvider = ({ children }: { children: ReactNode }) => {
       const error = err instanceof Error ? err : new Error(String(err))
       if (attempt < MAX_ATTEMPTS) {
         const delay = RECONNECT_DELAYS[Math.min(attempt, RECONNECT_DELAYS.length - 1)]
-        setTimeout(() => connectServer(config, attempt + 1), delay)
+        const timeoutId = setTimeout(() => {
+          retryTimeouts.current.delete(config.id)
+          connectServer(config, attempt + 1)
+        }, delay)
+        retryTimeouts.current.set(config.id, timeoutId)
         setServers((prev) =>
           prev.map((s) =>
             s.id === config.id
@@ -85,13 +92,21 @@ export const MCPProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const disconnectServer = (serverId: string) => {
+    const pendingRetry = retryTimeouts.current.get(serverId)
+    if (pendingRetry) {
+      clearTimeout(pendingRetry)
+      retryTimeouts.current.delete(serverId)
+    }
+
+    const transport = transportRefs.current.get(serverId)
+    if (transport) {
+      transport.close()
+      transportRefs.current.delete(serverId)
+    }
+
     const client = clientRefs.current.get(serverId)
     if (client?.close) {
-      try {
-        client.close()
-      } catch (error) {
-        console.error('Error closing MCP client:', error)
-      }
+      client.close()
     }
     clientRefs.current.delete(serverId)
   }

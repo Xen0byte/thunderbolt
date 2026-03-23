@@ -1,20 +1,13 @@
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+import { isTauri } from '@/lib/platform'
 import type { McpServerConfig, McpTransportResult, CredentialStore } from '@/types/mcp'
-import { createTauriHttpTransport } from './tauri-http-transport'
-import { createTauriSseTransport } from './tauri-sse-transport'
-import { TauriStdioTransport } from './tauri-stdio-transport'
 
 /**
  * Creates the appropriate MCP transport based on server configuration.
  *
- * For HTTP and SSE transports:
- * - External URLs use Tauri's native HTTP client (CORS bypass)
- * - Localhost URLs use the Tauri transport as well for consistency
- * - Bearer auth is injected as an Authorization header
- * - OAuth auth is delegated to the authProvider injected by the auth layer
- *
- * For stdio transports:
- * - Spawns a child process via Tauri shell plugin
- * - Bearer/API key credentials are passed as environment variables per MCP spec
+ * Platform-aware: uses Tauri native HTTP (CORS bypass) when available,
+ * falls back to browser fetch for web. stdio is desktop-only.
  */
 export const createTransport = async (
   config: McpServerConfig,
@@ -25,16 +18,29 @@ export const createTransport = async (
   if (transport.type === 'http') {
     const url = new URL(transport.url!)
     const requestInit = await buildRequestInit(config.id, auth.authType, credentialStore)
-    return { transport: createTauriHttpTransport(url, requestInit ? { requestInit } : undefined) }
+    const opts = requestInit ? { requestInit } : undefined
+
+    if (isTauri()) {
+      const { createTauriHttpTransport } = await import('./tauri-http-transport')
+      return { transport: createTauriHttpTransport(url, opts) }
+    }
+    return { transport: new StreamableHTTPClientTransport(url, opts) }
   }
 
   if (transport.type === 'sse') {
     const url = new URL(transport.url!)
     const requestInit = await buildRequestInit(config.id, auth.authType, credentialStore)
-    return { transport: createTauriSseTransport(url, requestInit ? { requestInit } : undefined) }
+    const opts = requestInit ? { requestInit } : undefined
+
+    if (isTauri()) {
+      const { createTauriSseTransport } = await import('./tauri-sse-transport')
+      return { transport: createTauriSseTransport(url, opts) }
+    }
+    return { transport: new SSEClientTransport(url, opts) }
   }
 
   if (transport.type === 'stdio') {
+    const { TauriStdioTransport } = await import('./tauri-stdio-transport')
     const env = await buildStdioEnv(config.id, auth.authType, credentialStore)
     return {
       transport: new TauriStdioTransport({

@@ -1,6 +1,7 @@
 import { useDatabase } from '@/contexts'
 import { getAllMcpServers } from '@/dal'
 import { useMCP } from '@/lib/mcp-provider'
+import { isSupportedTransport } from '@/lib/mcp-utils'
 import type { McpAuthType, McpTransportType } from '@/types/mcp'
 import { toCompilableQuery } from '@powersync/drizzle-driver'
 import { useQuery } from '@powersync/tanstack-react-query'
@@ -27,9 +28,10 @@ export const useMcpSync = () => {
       const currentServers = serversRef.current
       const providerServerIds = new Set(currentServers.map((s) => s.id))
 
-      // Add new servers from database that aren't in provider
+      // Add new servers from database that aren't in provider (skip unsupported transports)
       for (const dbServer of dbServers) {
-        if (!providerServerIds.has(dbServer.id)) {
+        const transportType = (dbServer.type as McpTransportType) ?? 'http'
+        if (!providerServerIds.has(dbServer.id) && isSupportedTransport(transportType)) {
           await addServer({
             id: dbServer.id,
             name: dbServer.name ?? 'Unnamed Server',

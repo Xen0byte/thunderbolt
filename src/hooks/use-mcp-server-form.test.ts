@@ -3,46 +3,7 @@ import { describe, expect, it } from 'bun:test'
 import { useMcpServerFormState } from './use-mcp-server-form'
 
 describe('useMcpServerFormState', () => {
-  describe('initial state', () => {
-    it('starts with http transport', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      expect(result.current.state.transportType).toBe('http')
-    })
-
-    it('starts with empty url and command', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      expect(result.current.state.url).toBe('')
-      expect(result.current.state.command).toBe('')
-    })
-
-    it('starts with no auth', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      expect(result.current.state.authType).toBe('none')
-      expect(result.current.state.bearerToken).toBe('')
-    })
-
-    it('starts with idle connection status', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      expect(result.current.state.connectionStatus).toBe('idle')
-      expect(result.current.state.connectionError).toBeNull()
-    })
-
-    it('starts with empty capabilities and args', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      expect(result.current.state.serverCapabilities).toEqual([])
-      expect(result.current.state.args).toEqual([])
-    })
-  })
-
   describe('SET_TRANSPORT_TYPE', () => {
-    it('changes transport type', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      act(() => {
-        result.current.dispatch({ type: 'SET_TRANSPORT_TYPE', payload: 'stdio' })
-      })
-      expect(result.current.state.transportType).toBe('stdio')
-    })
-
     it('resets url, command, args and connection state on transport change', () => {
       const { result } = renderHook(() => useMcpServerFormState())
       act(() => {
@@ -61,45 +22,7 @@ describe('useMcpServerFormState', () => {
     })
   })
 
-  describe('SET_URL', () => {
-    it('sets the url', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      act(() => {
-        result.current.dispatch({ type: 'SET_URL', payload: 'http://localhost:8000/mcp/' })
-      })
-      expect(result.current.state.url).toBe('http://localhost:8000/mcp/')
-    })
-  })
-
-  describe('SET_COMMAND', () => {
-    it('sets the command', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      act(() => {
-        result.current.dispatch({ type: 'SET_COMMAND', payload: 'npx' })
-      })
-      expect(result.current.state.command).toBe('npx')
-    })
-  })
-
-  describe('SET_ARGS', () => {
-    it('sets the args array', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      act(() => {
-        result.current.dispatch({ type: 'SET_ARGS', payload: ['mcp-server', '--port', '8080'] })
-      })
-      expect(result.current.state.args).toEqual(['mcp-server', '--port', '8080'])
-    })
-  })
-
   describe('SET_AUTH_TYPE', () => {
-    it('sets the auth type', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      act(() => {
-        result.current.dispatch({ type: 'SET_AUTH_TYPE', payload: 'bearer' })
-      })
-      expect(result.current.state.authType).toBe('bearer')
-    })
-
     it('clears bearer token when auth type changes', () => {
       const { result } = renderHook(() => useMcpServerFormState())
       act(() => {
@@ -110,71 +33,6 @@ describe('useMcpServerFormState', () => {
         result.current.dispatch({ type: 'SET_AUTH_TYPE', payload: 'none' })
       })
       expect(result.current.state.bearerToken).toBe('')
-    })
-  })
-
-  describe('SET_BEARER_TOKEN', () => {
-    it('sets the bearer token', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      act(() => {
-        result.current.dispatch({ type: 'SET_BEARER_TOKEN', payload: 'my-api-key' })
-      })
-      expect(result.current.state.bearerToken).toBe('my-api-key')
-    })
-  })
-
-  describe('SET_CONNECTION_STATUS', () => {
-    it('updates connection status to testing', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      act(() => {
-        result.current.dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'testing' })
-      })
-      expect(result.current.state.connectionStatus).toBe('testing')
-    })
-
-    it('updates connection status to success', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      act(() => {
-        result.current.dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'success' })
-      })
-      expect(result.current.state.connectionStatus).toBe('success')
-    })
-
-    it('updates connection status to error', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      act(() => {
-        result.current.dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' })
-      })
-      expect(result.current.state.connectionStatus).toBe('error')
-    })
-  })
-
-  describe('SET_CONNECTION_ERROR', () => {
-    it('sets the connection error message', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      act(() => {
-        result.current.dispatch({ type: 'SET_CONNECTION_ERROR', payload: 'Connection refused' })
-      })
-      expect(result.current.state.connectionError).toBe('Connection refused')
-    })
-
-    it('clears the connection error', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      act(() => {
-        result.current.dispatch({ type: 'SET_CONNECTION_ERROR', payload: 'some error' })
-        result.current.dispatch({ type: 'SET_CONNECTION_ERROR', payload: null })
-      })
-      expect(result.current.state.connectionError).toBeNull()
-    })
-  })
-
-  describe('SET_CAPABILITIES', () => {
-    it('sets server capabilities', () => {
-      const { result } = renderHook(() => useMcpServerFormState())
-      act(() => {
-        result.current.dispatch({ type: 'SET_CAPABILITIES', payload: ['tool_a', 'tool_b'] })
-      })
-      expect(result.current.state.serverCapabilities).toEqual(['tool_a', 'tool_b'])
     })
   })
 

@@ -16,12 +16,6 @@ use tokio::sync::Mutex;
 pub fn create_app() -> tauri::Builder<tauri::Wry> {
     let mut builder = tauri::Builder::default();
 
-    // Conditionally include the HTTP plugin when the `native_fetch` feature is enabled
-    #[cfg(feature = "native_fetch")]
-    {
-        builder = builder.plugin(tauri_plugin_http::init());
-    }
-
     // Single-instance: focus existing window when a second instance is launched (desktop only)
     #[cfg(desktop)]
     {
@@ -33,8 +27,10 @@ pub fn create_app() -> tauri::Builder<tauri::Wry> {
         }));
     }
 
+
     // Core plugins that are always enabled
     builder = builder
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())

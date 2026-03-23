@@ -1,3 +1,31 @@
+import { isDesktop, isMobile, isTauri } from '@/lib/platform'
+import type { McpTransportType } from '@/types/mcp'
+
+type PlatformCategory = 'desktop' | 'mobile' | 'web'
+
+/** Transport types supported on each platform */
+const PLATFORM_TRANSPORTS: Record<PlatformCategory, McpTransportType[]> = {
+  desktop: ['http', 'sse', 'stdio'],
+  mobile: ['http', 'sse'],
+  web: ['http', 'sse'],
+}
+
+/** Returns the platform category for transport filtering */
+const getPlatformCategory = (): PlatformCategory => {
+  if (isDesktop()) return 'desktop'
+  if (isMobile()) return 'mobile'
+  return 'web'
+}
+
+/** Returns the transport types available on the current platform */
+export const getSupportedTransports = (): McpTransportType[] => PLATFORM_TRANSPORTS[getPlatformCategory()]
+
+/** Checks if a transport type is supported on the current platform */
+export const isSupportedTransport = (type: McpTransportType): boolean => getSupportedTransports().includes(type)
+
+/** Returns true when the current platform may encounter CORS issues with remote MCP servers */
+export const isCorsRestricted = (): boolean => !isTauri()
+
 /**
  * Validates an MCP server URL for HTTP/SSE transport.
  * Throws with a descriptive message on invalid input.
