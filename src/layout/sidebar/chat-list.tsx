@@ -35,7 +35,7 @@ export const ChatList = ({
   return (
     <>
       <SidebarGroup className="flex-1 flex flex-col min-h-0">
-        {!isCollapsed && (chatThreads.length > 0 || debouncedSearchQuery) && (
+        {!isCollapsed && (chatThreads.length > 0 || debouncedSearchQuery || showSearch) && (
           <div className="flex items-center justify-between flex-shrink-0">
             <SidebarGroupLabel>Recent Chats</SidebarGroupLabel>
             <ChatActions
@@ -49,9 +49,7 @@ export const ChatList = ({
         )}
         <div
           className={`transition-all duration-300 ease-in-out flex-shrink-0 ${
-            showSearch && !isCollapsed && (chatThreads.length > 0 || debouncedSearchQuery)
-              ? 'max-h-12 opacity-100 mt-2'
-              : 'max-h-0 opacity-0 overflow-hidden'
+            showSearch && !isCollapsed ? 'max-h-12 opacity-100 mt-2' : 'max-h-0 opacity-0 overflow-hidden'
           }`}
         >
           <SearchInput

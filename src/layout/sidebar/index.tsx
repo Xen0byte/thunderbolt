@@ -175,6 +175,7 @@ export default function Sidebar() {
       setShowSearch(true)
     } else {
       setShowSearch(false)
+      setSearchQuery('')
     }
   }
 
