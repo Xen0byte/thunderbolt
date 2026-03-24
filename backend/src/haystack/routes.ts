@@ -35,7 +35,6 @@ export const createHaystackRoutes = (fetchFn: typeof fetch = globalThis.fetch) =
     ]),
   )
 
-  // Pipeline discovery endpoint for frontend agent registration
   router.get('/pipelines', () => ({
     data: pipelines.map((p) => ({
       slug: p.slug,
@@ -44,7 +43,6 @@ export const createHaystackRoutes = (fetchFn: typeof fetch = globalThis.fetch) =
     })),
   }))
 
-  // File download proxy for PDF/DOCX viewer
   router.get(
     '/files/:fileId',
     async ({ params }) => {
@@ -78,7 +76,6 @@ export const createHaystackRoutes = (fetchFn: typeof fetch = globalThis.fetch) =
     },
   )
 
-  // WebSocket ACP endpoint per pipeline
   for (const pipeline of pipelines) {
     const client = clients.get(pipeline.slug)!
     const handler = createHaystackWebSocketHandler(pipeline, client)

@@ -114,7 +114,6 @@ export const createBuiltInAgent = (deps: BuiltInAgentDeps) => {
       const ac = new AbortController()
       abortControllers.set(params.sessionId, ac)
 
-      // Extract text from content blocks
       const text = params.prompt
         .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
         .map((block) => block.text)

@@ -16,7 +16,6 @@ type TextPartProps = {
   messageId: string
   sources?: SourceMetadata[]
   haystackReferences?: HaystackReferenceMeta[]
-  isDocumentSearch?: boolean
 }
 
 /**

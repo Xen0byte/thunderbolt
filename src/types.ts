@@ -115,7 +115,6 @@ export type UIMessageMetadata = {
   sources?: SourceMetadata[]
   haystackDocuments?: HaystackDocumentMeta[]
   haystackReferences?: HaystackReferenceMeta[]
-  isDocumentSearch?: boolean
 }
 
 export type SideviewType = 'message' | 'thread' | 'imap' | 'document'

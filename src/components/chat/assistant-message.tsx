@@ -42,7 +42,6 @@ export const mountMessageParts = (
   reasoningStartTimes?: Record<string, number>,
   sources?: SourceMetadata[],
   haystackReferences?: HaystackReferenceMeta[],
-  isDocumentSearch?: boolean,
 ) => {
   const partElements: ReactNode[] = []
 
@@ -82,7 +81,6 @@ export const mountMessageParts = (
             messageId={messageId}
             sources={sources}
             haystackReferences={haystackReferences}
-            isDocumentSearch={isDocumentSearch}
           />,
         )
         break
@@ -126,8 +124,6 @@ export const AssistantMessage = memo(
       [JSON.stringify(message.metadata?.haystackReferences)],
     )
 
-    const isDocumentSearch = message.metadata?.isDocumentSearch
-
     // Memoize part element creation to prevent recreating React nodes unnecessarily
     const partElements: ReactNode[] = useMemo(
       () =>
@@ -139,18 +135,8 @@ export const AssistantMessage = memo(
           reasoningStartTimes,
           sources,
           haystackReferences,
-          isDocumentSearch,
         ),
-      [
-        groupedParts,
-        isStreaming,
-        message.id,
-        reasoningTime,
-        reasoningStartTimes,
-        sources,
-        haystackReferences,
-        isDocumentSearch,
-      ],
+      [groupedParts, isStreaming, message.id, reasoningTime, reasoningStartTimes, sources, haystackReferences],
     )
 
     const copyText = useMemo(() => extractTextFromParts(message.parts), [message.parts])

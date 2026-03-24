@@ -54,7 +54,6 @@ export const sendAcpPrompt = async ({ sessionId, text, metadata, saveMessages }:
 
     const result = await acpClient.prompt(text)
 
-    // Extract Haystack metadata from PromptResponse._meta
     if (result._meta) {
       const meta = result._meta as Record<string, unknown>
       if (meta.haystackDocuments) {

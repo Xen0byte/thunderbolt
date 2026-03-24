@@ -22,10 +22,8 @@ export const createMessageAccumulator = (messageId?: string) => {
   let reasoningContent = ''
   const toolCalls = new Map<string, ToolCallState>()
 
-  // Haystack metadata from _meta
   let haystackReferences: HaystackReferenceMeta[] | undefined
   let haystackDocuments: HaystackDocumentMeta[] | undefined
-  let isDocumentSearch = false
 
   const buildMessage = (): ThunderboltUIMessage => {
     const parts: ThunderboltUIMessage['parts'] = []
@@ -80,9 +78,6 @@ export const createMessageAccumulator = (messageId?: string) => {
     if (haystackDocuments) {
       metadata.haystackDocuments = haystackDocuments
     }
-    if (isDocumentSearch) {
-      metadata.isDocumentSearch = true
-    }
 
     const message: ThunderboltUIMessage = {
       id,
@@ -103,10 +98,8 @@ export const createMessageAccumulator = (messageId?: string) => {
         if (update.content.type === 'text') {
           textContent += update.content.text
         }
-        // Capture Haystack references from _meta on ContentChunk
         if (update._meta?.haystackReferences) {
           haystackReferences = update._meta.haystackReferences as HaystackReferenceMeta[]
-          isDocumentSearch = true
         }
         break
 
@@ -154,11 +147,9 @@ export const createMessageAccumulator = (messageId?: string) => {
     buildMessage,
     setHaystackDocuments(docs: HaystackDocumentMeta[]) {
       haystackDocuments = docs
-      isDocumentSearch = true
     },
     setHaystackReferences(refs: HaystackReferenceMeta[]) {
       haystackReferences = refs
-      isDocumentSearch = true
     },
     get id() {
       return id

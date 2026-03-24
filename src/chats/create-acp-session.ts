@@ -6,11 +6,12 @@ import { connectToRemoteAgent } from '@/acp/remote-agent'
 import { runBuiltInPrompt } from '@/acp/run-built-in-prompt'
 import { handleSessionUpdate } from './use-acp-chat'
 import { useChatStore } from './chat-store'
-import { isTauri, isDesktop } from '@/lib/platform'
+import { isAgentAvailableOnPlatform } from '@/lib/platform'
 import type { Agent, Mode, Model } from '@/types'
 import type { AcpClient } from '@/acp/client'
-import type { AgentSessionState } from '@/acp/types'
+import type { AgentConfig, AgentSessionState } from '@/acp/types'
 import type { MCPClient } from '@/lib/mcp-provider'
+import type { Stream } from '@agentclientprotocol/sdk'
 import { AgentSideConnection } from '@agentclientprotocol/sdk'
 
 type CreateAcpSessionOptions = {
@@ -28,6 +29,34 @@ type CreateAcpSessionOptions = {
 type AcpSessionResult = {
   acpClient: AcpClient
   sessionState: AgentSessionState
+}
+
+/** Convert an Agent DB row to an AgentConfig runtime object. */
+const toAgentConfig = (agent: Agent): AgentConfig => ({
+  id: agent.id,
+  name: agent.name,
+  type: agent.type as AgentConfig['type'],
+  transport: agent.transport as AgentConfig['transport'],
+  command: agent.command ?? undefined,
+  args: agent.args ? JSON.parse(agent.args) : undefined,
+  url: agent.url ?? undefined,
+  isSystem: agent.isSystem === 1,
+  enabled: agent.enabled === 1,
+})
+
+/** Create an AcpClient from a stream, wire up session updates, and perform the ACP handshake. */
+const initializeAcpSession = async (stream: Stream, chatId: string): Promise<AcpSessionResult> => {
+  const acpClient = createAcpClient({
+    stream,
+    onSessionUpdate: (update) => {
+      handleSessionUpdate(chatId, update)
+    },
+  })
+
+  await acpClient.initialize()
+  const sessionState = await acpClient.createSession()
+
+  return { acpClient, sessionState }
 }
 
 /**
@@ -75,11 +104,8 @@ export const createAcpSession = async ({
       }
     },
     runPrompt: async ({ sessionId, modelId, modeId, conn, abortSignal }) => {
-      // Get current messages from the store for context
       const session = useChatStore.getState().sessions.get(chatId)
       const currentMessages = session?.messages ?? []
-
-      // Find the mode's system prompt
       const mode = modes.find((m) => m.id === modeId)
 
       return runBuiltInPrompt({
@@ -95,19 +121,9 @@ export const createAcpSession = async ({
     },
   })
 
-  const acpClient = createAcpClient({
-    stream: clientStream,
-    onSessionUpdate: (update) => {
-      handleSessionUpdate(chatId, update)
-    },
-  })
-
   new AgentSideConnection(agentHandler, agentStream)
 
-  await acpClient.initialize()
-  const sessionState = await acpClient.createSession()
-
-  return { acpClient, sessionState }
+  return initializeAcpSession(clientStream, chatId)
 }
 
 /**
@@ -173,26 +189,18 @@ const localAgentTimeoutMs = 10_000
  * respond to the ACP handshake within localAgentTimeoutMs.
  */
 const createLocalAgentSession = async (chatId: string, agent: Agent): Promise<AcpSessionResult> => {
-  if (!isTauri() || !isDesktop()) {
+  if (!isAgentAvailableOnPlatform('local')) {
     throw new Error(`Local agent "${agent.name}" requires the desktop app.`)
   }
 
   const { createTauriSpawner } = await import('@/acp/tauri-spawner')
   const spawner = createTauriSpawner()
 
-  const agentConfig = {
-    id: agent.id,
-    name: agent.name,
-    type: agent.type as 'local',
-    transport: agent.transport as 'stdio',
-    command: agent.command ?? undefined,
-    args: agent.args ? JSON.parse(agent.args) : undefined,
-    isSystem: agent.isSystem === 1,
-    enabled: agent.enabled === 1,
-  }
+  const agentConfig = toAgentConfig(agent)
 
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
       () =>
         reject(
           new Error(
@@ -200,26 +208,19 @@ const createLocalAgentSession = async (chatId: string, agent: Agent): Promise<Ac
           ),
         ),
       localAgentTimeoutMs,
-    ),
-  )
+    )
+  })
 
   const connect = async (): Promise<AcpSessionResult> => {
     const { stream } = await connectToLocalAgent({ agentConfig, spawner })
-
-    const acpClient = createAcpClient({
-      stream,
-      onSessionUpdate: (update) => {
-        handleSessionUpdate(chatId, update)
-      },
-    })
-
-    await acpClient.initialize()
-    const sessionState = await acpClient.createSession()
-
-    return { acpClient, sessionState }
+    return initializeAcpSession(stream, chatId)
   }
 
-  return Promise.race([connect(), timeout])
+  try {
+    return await Promise.race([connect(), timeout])
+  } finally {
+    clearTimeout(timer!)
+  }
 }
 
 /**
@@ -230,27 +231,8 @@ const createRemoteAgentSession = async (chatId: string, agent: Agent): Promise<A
     throw new Error(`Remote agent "${agent.name}" has no URL configured.`)
   }
 
-  const agentConfig = {
-    id: agent.id,
-    name: agent.name,
-    type: agent.type as 'remote',
-    transport: agent.transport as 'websocket',
-    url: agent.url ?? undefined,
-    isSystem: agent.isSystem === 1,
-    enabled: agent.enabled === 1,
-  }
-
+  const agentConfig = toAgentConfig(agent)
   const { stream } = await connectToRemoteAgent({ agentConfig })
 
-  const acpClient = createAcpClient({
-    stream,
-    onSessionUpdate: (update) => {
-      handleSessionUpdate(chatId, update)
-    },
-  })
-
-  await acpClient.initialize()
-  const sessionState = await acpClient.createSession()
-
-  return { acpClient, sessionState }
+  return initializeAcpSession(stream, chatId)
 }

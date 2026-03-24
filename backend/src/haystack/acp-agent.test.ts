@@ -50,7 +50,7 @@ describe('createHaystackAcpAgent', () => {
 
     const { clientStream, agentStream } = createInProcessStreams()
 
-    const agentHandler = createHaystackAcpAgent({ client, pipelineConfig: testPipelineConfig })
+    const { handler: agentHandler } = createHaystackAcpAgent({ client, pipelineConfig: testPipelineConfig })
     new AgentSideConnection(agentHandler, agentStream)
 
     const updates: SessionNotification[] = []
@@ -81,7 +81,7 @@ describe('createHaystackAcpAgent', () => {
 
     const { clientStream, agentStream } = createInProcessStreams()
 
-    const agentHandler = createHaystackAcpAgent({ client, pipelineConfig: testPipelineConfig })
+    const { handler: agentHandler } = createHaystackAcpAgent({ client, pipelineConfig: testPipelineConfig })
     new AgentSideConnection(agentHandler, agentStream)
 
     const clientHandler: (agent: Agent) => Client = () => ({
@@ -145,7 +145,7 @@ describe('createHaystackAcpAgent', () => {
     const client = new HaystackClient(testHaystackConfig, mockFetch as unknown as typeof fetch)
     const { clientStream, agentStream } = createInProcessStreams()
 
-    const agentHandler = createHaystackAcpAgent({ client, pipelineConfig: testPipelineConfig })
+    const { handler: agentHandler } = createHaystackAcpAgent({ client, pipelineConfig: testPipelineConfig })
     new AgentSideConnection(agentHandler, agentStream)
 
     const updates: SessionNotification[] = []
@@ -212,7 +212,7 @@ describe('createHaystackAcpAgent', () => {
     const client = new HaystackClient(testHaystackConfig, mockFetch as unknown as typeof fetch)
     const { clientStream, agentStream } = createInProcessStreams()
 
-    const agentHandler = createHaystackAcpAgent({ client, pipelineConfig: testPipelineConfig })
+    const { handler: agentHandler } = createHaystackAcpAgent({ client, pipelineConfig: testPipelineConfig })
     new AgentSideConnection(agentHandler, agentStream)
 
     const clientHandler: (agent: Agent) => Client = () => ({

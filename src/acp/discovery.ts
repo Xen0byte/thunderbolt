@@ -1,24 +1,10 @@
-import { isTauri, isDesktop } from '@/lib/platform'
+import { isAgentAvailableOnPlatform } from '@/lib/platform'
+import { isAgentAvailable } from '@/acp/stdio-stream'
 import { localAgentCandidates, hashAgent, haystackAgentFromPipeline } from '@/defaults/agents'
 import { agentsTable } from '@/db/tables'
 import { eq, inArray } from 'drizzle-orm'
 import type { AnyDrizzleDatabase } from '@/db/database-interface'
 import type { Agent } from '@/types'
-
-const commandExists = async (command: string): Promise<boolean> => {
-  if (!isTauri()) {
-    return false
-  }
-
-  try {
-    const { Command } = await import('@tauri-apps/plugin-shell')
-    const cmd = Command.create('which', [command])
-    const output = await cmd.execute()
-    return output.code === 0
-  } catch {
-    return false
-  }
-}
 
 /**
  * Upsert agents into the DB, inserting new ones and updating changed ones.
@@ -61,12 +47,15 @@ const upsertAgents = async (db: AnyDrizzleDatabase, agents: Agent[]): Promise<vo
  * Only runs on Tauri desktop — returns immediately on web/mobile.
  */
 export const discoverAndSeedLocalAgents = async (db: AnyDrizzleDatabase): Promise<Agent[]> => {
-  if (!isTauri() || !isDesktop()) {
+  if (!isAgentAvailableOnPlatform('local')) {
     return []
   }
 
+  const { createTauriSpawner } = await import('@/acp/tauri-spawner')
+  const spawner = createTauriSpawner()
+
   const candidatesWithCommand = localAgentCandidates.filter((c) => c.command)
-  const existenceResults = await Promise.all(candidatesWithCommand.map((c) => commandExists(c.command!)))
+  const existenceResults = await Promise.all(candidatesWithCommand.map((c) => isAgentAvailable(spawner, c.command!)))
 
   const discovered = candidatesWithCommand.filter((_, i) => existenceResults[i])
   await upsertAgents(db, discovered)

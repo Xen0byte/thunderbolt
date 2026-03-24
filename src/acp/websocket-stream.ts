@@ -52,12 +52,12 @@ export const createWebSocketStream = (ws: WebSocketLike): Stream => {
   })
 
   // WritableStream → WebSocket (outgoing messages)
+  const decoder = new TextDecoder()
   const writable = new WritableStream<Uint8Array>({
     write(chunk) {
       if (ws.readyState !== wsOpen) {
         throw new Error('WebSocket is not open')
       }
-      const decoder = new TextDecoder()
       ws.send(decoder.decode(chunk))
     },
     close() {

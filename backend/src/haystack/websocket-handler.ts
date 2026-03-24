@@ -10,6 +10,7 @@ type ConnectionState = {
 
 // Per-connection state keyed by Elysia's ws.id
 const connections = new Map<string, ConnectionState>()
+const encoder = new TextEncoder()
 
 type ElysiaWS = {
   id: string
@@ -27,7 +28,7 @@ export const createHaystackWebSocketHandler = (pipelineConfig: HaystackPipelineC
 
     const agentStream = ndJsonStream(agentToClient.writable, clientToAgent.readable)
 
-    const agentHandler = createHaystackAcpAgent({ client, pipelineConfig })
+    const { handler: agentHandler, dispose } = createHaystackAcpAgent({ client, pipelineConfig })
     new AgentSideConnection(agentHandler, agentStream)
 
     // Pipe outgoing ACP messages back to WebSocket
@@ -56,6 +57,7 @@ export const createHaystackWebSocketHandler = (pipelineConfig: HaystackPipelineC
       writer,
       cleanup: () => {
         closed = true
+        dispose()
         writer.close().catch(() => {})
         reader.cancel().catch(() => {})
       },
@@ -68,7 +70,6 @@ export const createHaystackWebSocketHandler = (pipelineConfig: HaystackPipelineC
       return
     }
 
-    const encoder = new TextEncoder()
     // Elysia auto-parses JSON messages into objects — re-serialize for ndJSON stream
     const data = typeof message === 'string' ? message : JSON.stringify(message)
     state.writer.write(encoder.encode(data + '\n')).catch(() => {})

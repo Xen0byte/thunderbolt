@@ -32,6 +32,14 @@ type SessionState = {
 export const createHaystackAcpAgent = ({ client, pipelineConfig }: HaystackAcpAgentDeps) => {
   const sessions = new Map<string, SessionState>()
 
+  /** Abort all in-flight prompts and clear session state. Call on disconnect. */
+  const dispose = () => {
+    for (const session of sessions.values()) {
+      session.abortController?.abort()
+    }
+    sessions.clear()
+  }
+
   const agent: (conn: AgentSideConnection) => Agent = (conn) => ({
     initialize: async (_params: InitializeRequest): Promise<InitializeResponse> => ({
       agentInfo: { name: pipelineConfig.name, version: '1.0.0' },
@@ -148,5 +156,5 @@ export const createHaystackAcpAgent = ({ client, pipelineConfig }: HaystackAcpAg
     },
   })
 
-  return agent
+  return { handler: agent, dispose }
 }
