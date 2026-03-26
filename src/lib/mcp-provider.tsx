@@ -215,6 +215,3 @@ export const useMCP = () => {
   }
   return context
 }
-
-// Export the MCPClient type for use in other files
-export type { McpClient as MCPClient }

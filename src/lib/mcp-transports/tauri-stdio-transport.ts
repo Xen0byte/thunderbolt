@@ -37,6 +37,9 @@ export class TauriStdioTransport implements Transport {
   }
 
   async start(): Promise<void> {
+    if (this.child) {
+      return
+    }
     const { command, args = [], env } = this.options
 
     const cmd = Command.create(command, args, env ? { env } : undefined)

@@ -16,7 +16,7 @@ export const createTransport = async (
   const { transport, auth } = config
 
   if (transport.type === 'http') {
-    const url = new URL(transport.url!)
+    const url = new URL(transport.url)
     const requestInit = await buildRequestInit(config.id, auth.authType, credentialStore)
     const opts = requestInit ? { requestInit } : undefined
 
@@ -28,7 +28,7 @@ export const createTransport = async (
   }
 
   if (transport.type === 'sse') {
-    const url = new URL(transport.url!)
+    const url = new URL(transport.url)
     const requestInit = await buildRequestInit(config.id, auth.authType, credentialStore)
     const opts = requestInit ? { requestInit } : undefined
 
@@ -44,7 +44,7 @@ export const createTransport = async (
     const env = await buildStdioEnv(config.id, auth.authType, credentialStore)
     return {
       transport: new TauriStdioTransport({
-        command: transport.command!,
+        command: transport.command,
         args: transport.args,
         env,
       }),

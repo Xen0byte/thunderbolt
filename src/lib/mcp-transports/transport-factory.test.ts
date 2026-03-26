@@ -128,7 +128,7 @@ describe('createTransport', () => {
   })
 
   it('throws for unknown transport type', async () => {
-    const config = makeConfig({ transport: { type: 'unknown' as 'http' } })
+    const config = makeConfig({ transport: { type: 'unknown' as 'http', url: 'https://example.com' } })
     await expect(createTransport(config, makeCredentialStore())).rejects.toThrow('Unknown MCP transport type')
   })
 })
@@ -163,8 +163,8 @@ describe('validateArgs', () => {
     expect(() => validateArgs(['--flag', 'value', '-x'])).not.toThrow()
   })
 
-  it('accepts undefined args', () => {
-    expect(() => validateArgs(undefined)).not.toThrow()
+  it('accepts empty args', () => {
+    expect(() => validateArgs([])).not.toThrow()
   })
 
   it('rejects args containing null bytes', () => {
