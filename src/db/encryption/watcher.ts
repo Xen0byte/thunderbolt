@@ -5,8 +5,12 @@ import { getTableColumns } from 'drizzle-orm'
 import { getTableConfig } from 'drizzle-orm/sqlite-core'
 import { encryptionConfig } from './config'
 import { shadowTableName } from './shadow-tables'
-import { codec } from './codec'
+import { codec, encPrefix } from './codec'
 import { isEncryptionEnabled } from './enabled'
+import { getCK } from '@/crypto'
+
+/** True when a decoded value is still encrypted (CK was unavailable during decode). */
+const isStillEncrypted = (val: string | null): boolean => val !== null && val.startsWith(encPrefix)
 
 /**
  * Sets up trigger-based decryption watchers for ALL encrypted tables.
@@ -54,6 +58,15 @@ export const setupDecryptionWatchers = async (powerSync: PowerSyncDatabase): Pro
       },
       hooks: {
         beforeCreate: async (ctx) => {
+          // Skip re-population when CK is unavailable (e.g. after logout).
+          // Shadow tables already hold the decrypted values from the previous
+          // session — overwriting them with codec.decode pass-through would
+          // replace plaintext with encrypted ciphertext.
+          const ck = await getCK()
+          if (!ck) {
+            return
+          }
+
           const existing = await ctx.getAll<Record<string, string | null>>(
             `SELECT ${srcColumnList} FROM ${srcTableName}`,
           )
@@ -75,6 +88,11 @@ export const setupDecryptionWatchers = async (powerSync: PowerSyncDatabase): Pro
             await context.execute(`DELETE FROM ${destTableName} WHERE id = ?`, [diff.id])
           } else {
             const decoded = await decodeRow(diff)
+            // If any decoded value is still encrypted (CK unavailable), skip
+            // the shadow write to avoid overwriting good decrypted data.
+            if (decoded.some(isStillEncrypted)) {
+              continue
+            }
             await context.execute(
               `INSERT OR REPLACE INTO ${destTableName} (${destColumnList}) VALUES (${placeholders})`,
               [diff.id, ...decoded],

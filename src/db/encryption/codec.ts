@@ -1,7 +1,7 @@
 import { encrypt, decrypt, getCK } from '@/crypto'
 import { decodeIfBase64 } from '@/lib/base64'
 
-const encPrefix = '__enc:'
+export const encPrefix = '__enc:'
 
 export type EncryptionCodec = {
   encode: (plaintext: string) => Promise<string>
