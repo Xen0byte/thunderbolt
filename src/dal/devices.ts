@@ -49,8 +49,9 @@ export const getAllDevices = (db: AnyDrizzleDatabase) => {
  */
 export const getPendingDevices = (db: AnyDrizzleDatabase) => {
   const query = db
-    .select()
+    .select(devicesSelect)
     .from(devicesTable)
+    .leftJoin(devicesShadow, decryptedJoin(devicesTable, devicesShadow))
     .where(eq(devicesTable.status, 'APPROVAL_PENDING'))
     .orderBy(desc(devicesTable.createdAt))
   return query as typeof query & DrizzleQueryWithPromise<Device>
