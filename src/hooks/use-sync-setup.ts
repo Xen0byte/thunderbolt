@@ -37,7 +37,6 @@ type SyncSetupAction =
   | { type: 'SET_ERROR'; payload: string }
   | { type: 'CLEAR_ERROR' }
   | { type: 'SETUP_COMPLETE' }
-  | { type: 'GO_BACK' }
   | { type: 'RESET' }
 
 const initialState: SyncSetupState = {
@@ -78,8 +77,6 @@ const reducer = (state: SyncSetupState, action: SyncSetupAction): SyncSetupState
       return { ...state, error: null }
     case 'SETUP_COMPLETE':
       return { ...state, step: 'setup-complete', isLoading: false }
-    case 'GO_BACK':
-      return { ...initialState, step: 'intro' }
     case 'RESET':
       return initialState
     default:
@@ -100,8 +97,6 @@ export const useSyncSetup = () => {
     // Mock auto-detection: always treats as first device
     dispatch({ type: 'DETECTED_FIRST_DEVICE' })
   }
-
-  const goBack = () => dispatch({ type: 'GO_BACK' })
 
   // Stub: In PR 5, this will call completeFirstDeviceSetup() to generate real keys
   const continueFirstDeviceSetup = () => {
@@ -138,7 +133,6 @@ export const useSyncSetup = () => {
   return {
     ...state,
     continueIntro,
-    goBack,
     continueFirstDeviceSetup,
     goToRecoveryKeyEntry,
     chooseAdditionalDevice,
