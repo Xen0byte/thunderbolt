@@ -4,7 +4,8 @@
  * When adding a table: add here, then to src/db/tables.ts, backend/src/db/powersync-schema.ts,
  * src/db/powersync/schema.ts, and powersync-service/config/config.yaml.
  *
- * NOTE: mcp_credentials is a local-only table (not listed here) and is never synced.
+ * NOTE: mcp_servers and mcp_credentials are local-only tables (not listed here) and are never synced.
+ * MCP server configs are device-specific (stdio commands, localhost URLs differ per machine).
  * Credentials are stored device-locally via AES-GCM encryption.
  */
 
@@ -14,7 +15,6 @@ export const powersyncTableNames = [
   'chat_messages',
   'tasks',
   'models',
-  'mcp_servers',
   'prompts',
   'triggers',
   'modes',
@@ -37,7 +37,6 @@ export const powersyncTableToQueryKeys: {
   chat_messages: [['messages'], ['messageCache']],
   tasks: [['tasks']],
   models: [['models']],
-  mcp_servers: [['mcp-servers']],
   prompts: [['prompts']],
   triggers: [['triggers']],
   modes: [['modes']],

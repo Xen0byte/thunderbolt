@@ -1,15 +1,24 @@
 import { getCorsOrigins, getSettings } from '@/config/settings'
 import { safeErrorHandler } from '@/middleware/error-handling'
+import { isLoopback, isPrivateAddress } from '@/utils/url-validation'
 import { buildQueryString, extractResponseHeaders, filterHeaders } from '@/utils/request'
 import cors from '@elysiajs/cors'
 import { Elysia } from 'elysia'
 
-/** Validates MCP target URLs. Allows localhost (MCP servers run locally) unlike the link preview SSRF check. */
+/**
+ * Validates MCP target URLs with SSRF protection.
+ * Allows localhost (MCP servers run locally) but blocks all other private/internal addresses.
+ */
 const validateMcpTargetUrl = (url: string): { valid: boolean; error?: string } => {
   try {
     const parsed = new URL(url)
     if (!['http:', 'https:'].includes(parsed.protocol)) {
       return { valid: false, error: 'Only HTTP and HTTPS URLs are supported' }
+    }
+    const hostname = parsed.hostname
+    // Allow localhost for local MCP servers, block all other private addresses
+    if (!isLoopback(hostname) && isPrivateAddress(hostname)) {
+      return { valid: false, error: 'Internal network addresses are not allowed' }
     }
     return { valid: true }
   } catch {

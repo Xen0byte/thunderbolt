@@ -72,6 +72,11 @@ export const useMcpOAuthCallback = () => {
           throw new Error('OAuth state not found — the authorization flow may have expired')
         }
 
+        // Verify state nonce to prevent CSRF
+        if (!oauthState.stateNonce || mcpOauth.state !== oauthState.stateNonce) {
+          throw new Error('OAuth state mismatch — possible CSRF attack')
+        }
+
         // Route through CORS proxy when needed (cross-origin requests)
         const fetchFn = await createOAuthFetch(oauthState.serverUrl)
 

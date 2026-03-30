@@ -16,20 +16,33 @@ type EncryptedBlob = {
   ciphertext: string
 }
 
+const saltStorageKey = 'thunderbolt_mcp_pbkdf2_salt'
+
+/** Gets or creates a random 16-byte PBKDF2 salt, persisted in localStorage. */
+const getOrCreateSalt = (): Uint8Array => {
+  const stored = localStorage.getItem(saltStorageKey)
+  if (stored) {
+    return Uint8Array.from(atob(stored), (c) => c.charCodeAt(0))
+  }
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  localStorage.setItem(saltStorageKey, btoa(String.fromCharCode(...salt)))
+  return salt
+}
+
 /**
- * Derives a 256-bit AES-GCM key from the device hostname using PBKDF2.
- * The key is bound to the hostname so credentials are device-local.
+ * Derives a 256-bit AES-GCM key from the device ID using PBKDF2.
+ * Uses a per-device random salt (stored in localStorage) for proper key derivation.
  */
-const deriveKey = async (hostname: string): Promise<CryptoKey> => {
+const deriveKey = async (deviceId: string): Promise<CryptoKey> => {
   const encoder = new TextEncoder()
-  const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(appSaltPrefix + hostname), 'PBKDF2', false, [
+  const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(appSaltPrefix + deviceId), 'PBKDF2', false, [
     'deriveKey',
   ])
 
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt: encoder.encode('thunderbolt-mcp-credential-salt'),
+      salt: getOrCreateSalt().buffer as ArrayBuffer,
       iterations: pbkdf2Iterations,
       hash: 'SHA-256',
     },

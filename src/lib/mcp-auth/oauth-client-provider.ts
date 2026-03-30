@@ -115,22 +115,28 @@ class McpOAuthClientProvider implements OAuthClientProvider {
       throw new Error('No pending OAuth authorization URL')
     }
 
+    // Generate CSRF nonce and append to auth URL
+    const stateNonce = crypto.randomUUID()
+    const authUrl = new URL(this.pendingAuthUrl)
+    authUrl.searchParams.set('state', stateNonce)
+
     await setMcpOAuthState({
       serverId: this.serverId,
       serverUrl: this.serverUrl,
       codeVerifier: this.codeVerifierValue,
       redirectUrl: this.config.redirectUrl,
       clientInfo: this.clientInfo ? JSON.stringify(this.clientInfo) : null,
+      stateNonce,
     })
 
     if (this.config.platform === 'web') {
-      window.location.assign(this.pendingAuthUrl)
+      window.location.assign(authUrl.toString())
       return
     }
 
     // Desktop/mobile: open in system browser
     const { openUrl } = await import('@tauri-apps/plugin-opener')
-    await openUrl(this.pendingAuthUrl)
+    await openUrl(authUrl.toString())
   }
 
   /**
