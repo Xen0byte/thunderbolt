@@ -61,3 +61,6 @@ src-tauri/gen/apple/.bundle/
 
 # Powersync
 public/@powersync/**
+.team
+plan-feedback-fixes.md
+pr-feedback-review.md
