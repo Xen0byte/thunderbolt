@@ -6,9 +6,42 @@ const deltaEventSchema = z.object({
   delta: z.object({ text: z.string() }),
 })
 
+const deepsetFileSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+})
+
+const deepsetReferenceSchema = z.object({
+  document_position: z.number(),
+  document_id: z.string(),
+})
+
+const deepsetAnswerSchema = z.object({
+  answer: z.string(),
+  files: z.array(deepsetFileSchema).default([]),
+  meta: z
+    .object({
+      _references: z.array(deepsetReferenceSchema).default([]),
+    })
+    .optional(),
+})
+
+const deepsetDocumentSchema = z.object({
+  id: z.string(),
+  content: z.string(),
+  score: z.number(),
+  file: deepsetFileSchema,
+  meta: z.object({ page_number: z.number().optional() }).optional(),
+})
+
+const deepsetResultPayloadSchema = z.object({
+  answers: z.array(deepsetAnswerSchema),
+  documents: z.array(deepsetDocumentSchema),
+})
+
 const resultEventSchema = z.object({
   type: z.literal('result'),
-  result: z.unknown(),
+  result: deepsetResultPayloadSchema,
 })
 
 const errorEventSchema = z.object({
@@ -30,7 +63,7 @@ const parseSsePayload = (json: string): DeepsetSSEEvent | null => {
     return { type: 'delta', delta: event.delta.text }
   }
   if (event.type === 'result') {
-    return { type: 'result', result: event.result as DeepsetResultPayload }
+    return { type: 'result', result: event.result }
   }
   return { type: 'error', error: event.message ?? 'Unknown error' }
 }
