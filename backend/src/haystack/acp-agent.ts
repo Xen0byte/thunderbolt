@@ -87,7 +87,9 @@ export const createHaystackAcpAgent = ({ client, pipelineConfig }: HaystackAcpAg
             ? await handleDocumentSearch(conn, params.sessionId, client, text, ac)
             : await handleChatStream(conn, params.sessionId, client, session.haystackSessionId, text, ac)
 
-        session.abortController = null
+        if (session.abortController === ac) {
+          session.abortController = null
+        }
 
         if (ac.signal.aborted) {
           return { stopReason: 'cancelled' }
@@ -101,7 +103,9 @@ export const createHaystackAcpAgent = ({ client, pipelineConfig }: HaystackAcpAg
           },
         }
       } catch (error) {
-        session.abortController = null
+        if (session.abortController === ac) {
+          session.abortController = null
+        }
 
         if (ac.signal.aborted) {
           return { stopReason: 'cancelled' }
