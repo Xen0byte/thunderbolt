@@ -40,6 +40,36 @@ type RunBuiltInPromptParams = {
   mcpClients?: MCPClient[]
 }
 
+const buildToolset = async ({
+  supportsTools,
+  mcpClients,
+  sourceCollector,
+}: {
+  supportsTools: boolean
+  mcpClients?: MCPClient[]
+  sourceCollector: SourceMetadata[]
+}): Promise<Record<string, Tool>> => {
+  if (!supportsTools) {
+    return {}
+  }
+
+  const availableTools = await getAvailableTools(ky, sourceCollector)
+  const toolset: Record<string, Tool> = { ...createToolset(availableTools) }
+
+  for (const mcpClient of mcpClients ?? []) {
+    const mcpTools = await mcpClient.tools()
+    for (const [name, tool] of Object.entries(mcpTools)) {
+      if (toolset[name]) {
+        console.warn(`MCP tool "${name}" conflicts with an existing tool and was skipped`)
+        continue
+      }
+      toolset[name] = tool as Tool
+    }
+  }
+
+  return toolset
+}
+
 /**
  * Run a prompt through the built-in agent.
  * Wraps the AI SDK streamText logic and emits ACP session updates
@@ -83,22 +113,7 @@ export const runBuiltInPrompt = async ({
   const supportsTools = model.toolUsage !== 0
   const sourceCollector: SourceMetadata[] = []
 
-  let toolset: Record<string, Tool> = {}
-  if (supportsTools) {
-    const availableTools = await getAvailableTools(ky, sourceCollector)
-    toolset = { ...createToolset(availableTools) }
-
-    for (const mcpClient of mcpClients ?? []) {
-      const mcpTools = await mcpClient.tools()
-      for (const [name, tool] of Object.entries(mcpTools)) {
-        if (toolset[name]) {
-          console.warn(`MCP tool "${name}" conflicts with an existing tool and was skipped`)
-          continue
-        }
-        toolset[name] = tool as Tool
-      }
-    }
-  }
+  const toolset = await buildToolset({ supportsTools, mcpClients, sourceCollector })
 
   const getIntegrationStatus = (): string => {
     const statuses: string[] = []
