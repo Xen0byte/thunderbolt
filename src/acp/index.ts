@@ -6,7 +6,7 @@ export { createBuiltInAgent } from './built-in-agent'
 
 // Stream Adapters
 export { createInProcessStreams } from './streams'
-export { createStdioStream, isAgentAvailable, discoverLocalAgents } from './stdio-stream'
+export { createStdioStream, isAgentAvailable } from './stdio-stream'
 export type { SubprocessHandle, SubprocessSpawner } from './stdio-stream'
 export { createWebSocketStream } from './websocket-stream'
 export type { WebSocketLike } from './websocket-stream'

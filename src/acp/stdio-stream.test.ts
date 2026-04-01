@@ -1,11 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
-import {
-  createStdioStream,
-  discoverLocalAgents,
-  isAgentAvailable,
-  type SubprocessHandle,
-  type SubprocessSpawner,
-} from './stdio-stream'
+import { createStdioStream, isAgentAvailable, type SubprocessHandle, type SubprocessSpawner } from './stdio-stream'
 
 const createMockHandle = (): SubprocessHandle => {
   const { readable: stdout } = new TransformStream<Uint8Array>()
@@ -49,25 +43,3 @@ describe('isAgentAvailable', () => {
   })
 })
 
-describe('discoverLocalAgents', () => {
-  test('discovers available agents from candidates', async () => {
-    const spawner = createMockSpawner(['claude', 'goose'])
-
-    const results = await discoverLocalAgents(spawner, [
-      { command: 'claude', name: 'Claude Code' },
-      { command: 'codex', name: 'Codex' },
-      { command: 'goose', name: 'Goose' },
-    ])
-
-    expect(results).toHaveLength(3)
-    expect(results[0]).toEqual({ command: 'claude', name: 'Claude Code', available: true })
-    expect(results[1]).toEqual({ command: 'codex', name: 'Codex', available: false })
-    expect(results[2]).toEqual({ command: 'goose', name: 'Goose', available: true })
-  })
-
-  test('returns empty array for empty candidates', async () => {
-    const spawner = createMockSpawner([])
-    const results = await discoverLocalAgents(spawner, [])
-    expect(results).toEqual([])
-  })
-})

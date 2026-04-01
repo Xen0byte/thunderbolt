@@ -37,18 +37,3 @@ export const isAgentAvailable = async (spawner: SubprocessSpawner, command: stri
   return path !== null
 }
 
-/**
- * Discover which local CLI agents are available on the system.
- */
-export const discoverLocalAgents = async (
-  spawner: SubprocessSpawner,
-  candidates: Array<{ command: string; name: string }>,
-): Promise<Array<{ command: string; name: string; available: boolean }>> => {
-  const results = await Promise.all(
-    candidates.map(async (candidate) => ({
-      ...candidate,
-      available: await isAgentAvailable(spawner, candidate.command),
-    })),
-  )
-  return results
-}
