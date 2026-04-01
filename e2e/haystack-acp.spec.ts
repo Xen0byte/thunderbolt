@@ -4,7 +4,10 @@ import { goToNewChat, collectPageErrors } from './helpers'
 /**
  * E2E tests for Haystack/Deepset integration via ACP.
  * Requires backend with valid HAYSTACK_* env vars and frontend dev server.
+ * Set HAYSTACK_API_URL to enable these tests in CI.
  */
+
+const haystackEnabled = !!process.env.HAYSTACK_API_URL
 
 /** Helper: select the Haystack Document Search agent */
 const selectHaystackAgent = async (page: import('@playwright/test').Page) => {
@@ -32,6 +35,8 @@ const sendMessage = async (page: import('@playwright/test').Page, text: string) 
 }
 
 test.describe('Haystack ACP Agent', () => {
+  test.skip(!haystackEnabled, 'Skipped: HAYSTACK_API_URL not set')
+
   test('Haystack agent appears in agent selector', async ({ page }) => {
     const errors = collectPageErrors(page)
     await goToNewChat(page)
