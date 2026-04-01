@@ -242,7 +242,7 @@ describe('Account API', () => {
         name: 'My Device',
         lastSeen: now,
         createdAt: now,
-        status: 'TRUSTED',
+        trusted: true,
       })
 
       await db.insert(envelopesTable).values({
@@ -262,7 +262,6 @@ describe('Account API', () => {
       expect(response.status).toBe(204)
 
       const [device] = await db.select().from(devicesTable).where(eq(devicesTable.id, deviceId))
-      expect(device.status).toBe('REVOKED')
       expect(device.revokedAt).not.toBeNull()
 
       const envelopes = await db.select().from(envelopesTable).where(eq(envelopesTable.deviceId, deviceId))
@@ -284,7 +283,7 @@ describe('Account API', () => {
         name: 'User B Device',
         lastSeen: now,
         createdAt: now,
-        status: 'TRUSTED',
+        trusted: true,
       })
 
       const response = await app.handle(
@@ -297,7 +296,7 @@ describe('Account API', () => {
       expect(response.status).toBe(204)
 
       const [device] = await db.select().from(devicesTable).where(eq(devicesTable.id, deviceId))
-      expect(device.status).toBe('TRUSTED')
+      expect(device.trusted).toBe(true)
       expect(device.revokedAt).toBeNull()
     })
 
@@ -328,7 +327,7 @@ describe('Account API', () => {
         name: 'Already Revoked',
         lastSeen: now,
         createdAt: now,
-        status: 'TRUSTED',
+        trusted: true,
       })
 
       // First revoke
@@ -350,7 +349,6 @@ describe('Account API', () => {
       expect(response.status).toBe(204)
 
       const [device] = await db.select().from(devicesTable).where(eq(devicesTable.id, deviceId))
-      expect(device.status).toBe('REVOKED')
       expect(device.revokedAt).not.toBeNull()
     })
 
@@ -366,7 +364,7 @@ describe('Account API', () => {
         name: 'Pending Device',
         lastSeen: now,
         createdAt: now,
-        status: 'APPROVAL_PENDING',
+        trusted: false,
       })
 
       const response = await app.handle(
@@ -379,7 +377,6 @@ describe('Account API', () => {
       expect(response.status).toBe(204)
 
       const [device] = await db.select().from(devicesTable).where(eq(devicesTable.id, deviceId))
-      expect(device.status).toBe('REVOKED')
       expect(device.revokedAt).not.toBeNull()
 
       const envelopes = await db.select().from(envelopesTable).where(eq(envelopesTable.deviceId, deviceId))
