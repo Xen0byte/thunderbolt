@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { deepsetResultPayloadSchema } from './types'
 import type {
   DeepsetResultPayload,
   HaystackChatStreamRequest,
@@ -9,6 +10,10 @@ import type {
 const rawSessionSchema = z.object({
   search_session_id: z.string(),
 })
+
+const outputTypeSchema = z.object({ output_type: z.string().optional() })
+
+const rawSearchResponseSchema = z.object({ results: z.array(deepsetResultPayloadSchema).optional() })
 
 /** Deepset returns 591 when a pipeline is waking from idle. */
 const pipelineNotReadyStatus = 591
@@ -89,8 +94,12 @@ export class HaystackClient {
       const url = `${this.baseApiUrl}/pipelines/${this.config.pipelineName}`
       const response = await this.fetchFn(url, { method: 'GET', headers: this.headers })
       if (response.ok) {
-        const raw = (await response.json()) as { output_type?: unknown }
-        this.cachedOutputType = raw.output_type === 'DOCUMENT' ? 'DOCUMENT' : 'CHAT'
+        const parsed = outputTypeSchema.safeParse(await response.json())
+        if (!parsed.success) {
+          console.warn('[HaystackClient] getOutputType: unexpected response shape, defaulting to CHAT')
+        } else {
+          this.cachedOutputType = parsed.data.output_type === 'DOCUMENT' ? 'DOCUMENT' : 'CHAT'
+        }
       }
     } catch {
       // Fall back to CHAT if the metadata endpoint is unavailable
@@ -131,8 +140,12 @@ export class HaystackClient {
       signal,
     })
 
-    const data = (await response.json()) as { results?: DeepsetResultPayload[] }
-    return data.results?.[0] ?? { answers: [], documents: [] }
+    const parsed = rawSearchResponseSchema.safeParse(await response.json())
+    if (!parsed.success) {
+      console.warn('[HaystackClient] search: unexpected response shape, returning empty result')
+      return { answers: [], documents: [] }
+    }
+    return parsed.data.results?.[0] ?? { answers: [], documents: [] }
   }
 
   async downloadFile(fileId: string): Promise<Response> {
