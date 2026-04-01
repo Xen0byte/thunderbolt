@@ -34,33 +34,32 @@ test.describe('Model Selector', () => {
   })
 
   test('selecting a model shows checkmark indicator', async ({ page }) => {
-    // Find all model selector triggers in the form area
     const form = page.locator('form')
 
-    // Look for model selector by finding a button with a model-like name
-    // The built-in agent provides models from the DB
-    const modelButtons = form.locator('button').filter({
-      has: page.locator('svg'),
+    // The model selector trigger shows the selected model name (e.g. "GPT OSS").
+    // Find it by matching any of the default model names — these are distinct from
+    // mode names ("Chat", "Search", "Research") so this won't hit the mode selector.
+    const modelTrigger = form.locator('button').filter({
+      hasText: /GPT OSS|Mistral Medium|Sonnet/,
     })
 
-    // If we can find and click the model selector
-    const count = await modelButtons.count()
-    if (count > 1) {
-      // The model selector is separate from the submit button
-      // Click it to open the dropdown
-      await modelButtons.first().click()
-      await page.waitForTimeout(500)
+    if (!(await modelTrigger.count())) {
+      return
+    }
 
-      // In the dropdown, the currently selected model should have a checkmark (Check icon SVG)
-      const popover = page.locator('[data-radix-popper-content-wrapper]')
-      if (await popover.isVisible().catch(() => false)) {
-        // Look for a checkmark SVG inside the selected item
-        const selectedItem = popover.locator('.bg-accent')
-        if (await selectedItem.count()) {
-          const checkIcon = selectedItem.locator('svg')
-          expect(await checkIcon.count()).toBeGreaterThan(0)
-        }
-      }
+    await modelTrigger.first().click()
+    await page.waitForTimeout(500)
+
+    const popover = page.locator('[data-radix-popper-content-wrapper]')
+    if (!(await popover.isVisible().catch(() => false))) {
+      return
+    }
+
+    // The currently selected model item has bg-accent and a Check SVG icon
+    const selectedItem = popover.locator('.bg-accent')
+    if (await selectedItem.count()) {
+      const checkIcon = selectedItem.locator('svg')
+      expect(await checkIcon.count()).toBeGreaterThan(0)
     }
   })
 })
