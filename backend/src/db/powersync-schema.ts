@@ -63,7 +63,7 @@ export const chatMessagesTable = powersyncSchema.table(
     parts: text('parts'),
     chatThreadId: text('chat_thread_id').references(() => chatThreadsTable.id),
     modelId: text('model_id'),
-    parentId: text('parent_id').references((): any => chatMessagesTable.id),
+    parentId: text('parent_id').references((): AnyPgColumn => chatMessagesTable.id),
     cache: text('cache'),
     metadata: text('metadata'),
     deletedAt: timestamp('deleted_at'),
