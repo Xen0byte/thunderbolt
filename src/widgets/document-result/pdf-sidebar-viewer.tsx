@@ -3,7 +3,7 @@ import { useContentView } from '@/content-view/context'
 import { useSettings } from '@/hooks/use-settings'
 import { Button } from '@/components/ui/button'
 import { Download, Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
@@ -23,6 +23,27 @@ const getFileType = (fileName: string): FileType => {
   return 'unsupported'
 }
 
+type ViewerState =
+  | { status: 'loading' }
+  | { status: 'loaded'; blobUrl: string | null; docxHtml: string | null; numPages: number | null }
+  | { status: 'error'; message: string }
+
+type ViewerAction =
+  | { type: 'loaded'; blobUrl: string | null; docxHtml: string | null; numPages: number | null }
+  | { type: 'error'; message: string }
+  | { type: 'reset' }
+
+const viewerReducer = (_state: ViewerState, action: ViewerAction): ViewerState => {
+  switch (action.type) {
+    case 'loaded':
+      return { status: 'loaded', blobUrl: action.blobUrl, docxHtml: action.docxHtml, numPages: action.numPages }
+    case 'error':
+      return { status: 'error', message: action.message }
+    case 'reset':
+      return { status: 'loading' }
+  }
+}
+
 type DocumentSidebarViewerProps = {
   fileId: string
   fileName: string
@@ -32,17 +53,14 @@ type DocumentSidebarViewerProps = {
 export const PdfSidebarViewer = ({ fileId, fileName, initialPage }: DocumentSidebarViewerProps) => {
   const { close } = useContentView()
   const { cloudUrl } = useSettings({ cloud_url: 'http://localhost:8000/v1' })
-  const [blobUrl, setBlobUrl] = useState<string | null>(null)
-  const [docxHtml, setDocxHtml] = useState<string | null>(null)
-  const [numPages, setNumPages] = useState<number | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [state, dispatch] = useReducer(viewerReducer, { status: 'loading' })
   const blobUrlRef = useRef<string | null>(null)
 
   const fileType = getFileType(fileName)
 
   useEffect(() => {
     let cancelled = false
+    dispatch({ type: 'reset' })
 
     const fetchFile = async () => {
       const response = await fetch(`${cloudUrl.value}/haystack/files/${fileId}`)
@@ -65,17 +83,14 @@ export const PdfSidebarViewer = ({ fileId, fileName, initialPage }: DocumentSide
         const arrayBuffer = await blob.arrayBuffer()
         const result = await mammoth.convertToHtml({ arrayBuffer })
         if (!cancelled) {
-          setDocxHtml(result.value)
-          setBlobUrl(url)
-          setLoading(false)
+          dispatch({ type: 'loaded', blobUrl: url, docxHtml: result.value, numPages: null })
         } else {
           URL.revokeObjectURL(url)
           blobUrlRef.current = null
         }
       } else {
         if (!cancelled) {
-          setBlobUrl(url)
-          setLoading(false)
+          dispatch({ type: 'loaded', blobUrl: url, docxHtml: null, numPages: null })
         } else {
           URL.revokeObjectURL(url)
           blobUrlRef.current = null
@@ -85,8 +100,7 @@ export const PdfSidebarViewer = ({ fileId, fileName, initialPage }: DocumentSide
 
     fetchFile().catch((err) => {
       if (!cancelled) {
-        setError(err instanceof Error ? err.message : 'Failed to load document')
-        setLoading(false)
+        dispatch({ type: 'error', message: err instanceof Error ? err.message : 'Failed to load document' })
       }
     })
 
@@ -98,6 +112,8 @@ export const PdfSidebarViewer = ({ fileId, fileName, initialPage }: DocumentSide
       }
     }
   }, [fileId, fileType, cloudUrl.value])
+
+  const blobUrl = state.status === 'loaded' ? state.blobUrl : null
 
   const handleDownload = useCallback(() => {
     if (!blobUrl) {
@@ -111,9 +127,16 @@ export const PdfSidebarViewer = ({ fileId, fileName, initialPage }: DocumentSide
     document.body.removeChild(a)
   }, [blobUrl, fileName])
 
-  const onDocumentLoadSuccess = useCallback(({ numPages: pages }: { numPages: number }) => {
-    setNumPages(pages)
-  }, [])
+  const onDocumentLoadSuccess = useCallback(
+    ({ numPages: pages }: { numPages: number }) => {
+      if (state.status === 'loaded') {
+        dispatch({ type: 'loaded', blobUrl: state.blobUrl, docxHtml: state.docxHtml, numPages: pages })
+      }
+    },
+    [state],
+  )
+
+  const numPages = state.status === 'loaded' ? state.numPages : null
 
   useEffect(() => {
     if (!initialPage || !numPages || initialPage > numPages) {
@@ -135,24 +158,24 @@ export const PdfSidebarViewer = ({ fileId, fileName, initialPage }: DocumentSide
   return (
     <div className="flex h-full flex-col">
       <ContentViewHeader title={fileName} onClose={close} actions={downloadAction} className="border-b border-border" />
-      {loading && (
+      {state.status === 'loading' && (
         <div className="flex flex-1 items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       )}
 
-      {error && (
+      {state.status === 'error' && (
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-destructive">{error}</p>
+          <p className="text-sm text-destructive">{state.message}</p>
         </div>
       )}
 
-      {!loading && !error && (
+      {state.status === 'loaded' && (
         <div className="flex-1 overflow-auto p-4">
-          {fileType === 'pdf' && blobUrl && (
-            <Document file={blobUrl} onLoadSuccess={onDocumentLoadSuccess} loading={null}>
-              {numPages &&
-                Array.from({ length: numPages }, (_, i) => (
+          {fileType === 'pdf' && state.blobUrl && (
+            <Document file={state.blobUrl} onLoadSuccess={onDocumentLoadSuccess} loading={null}>
+              {state.numPages &&
+                Array.from({ length: state.numPages }, (_, i) => (
                   <div key={i + 1} data-page-number={i + 1}>
                     <Page pageNumber={i + 1} width={500} className="mb-4" />
                   </div>
@@ -160,11 +183,11 @@ export const PdfSidebarViewer = ({ fileId, fileName, initialPage }: DocumentSide
             </Document>
           )}
 
-          {fileType === 'docx' && docxHtml && (
+          {fileType === 'docx' && state.docxHtml && (
             <iframe
               className="prose prose-sm dark:prose-invert max-w-none w-full h-full border-0"
               sandbox=""
-              srcDoc={docxHtml}
+              srcDoc={state.docxHtml}
             />
           )}
 
