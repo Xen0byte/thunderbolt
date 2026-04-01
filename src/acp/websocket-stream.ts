@@ -44,9 +44,11 @@ type ReconnectOptions = {
  * Retries up to maxRetries (3) times on unexpected close, doubling the delay
  * each attempt starting from baseDelayMs (1000ms).
  * Does not reconnect on normal close (code 1000).
+ * Returns a cancel function to abort any pending retry timeout.
  */
-export const connectWithReconnect = ({ onConnect, onGiveUp, createWebSocket }: ReconnectOptions): void => {
+export const connectWithReconnect = ({ onConnect, onGiveUp, createWebSocket }: ReconnectOptions): { cancel: () => void } => {
   let retries = 0
+  let retryTimeout: ReturnType<typeof setTimeout> | undefined
 
   const attempt = () => {
     const ws = createWebSocket()
@@ -66,11 +68,17 @@ export const connectWithReconnect = ({ onConnect, onGiveUp, createWebSocket }: R
       }
       const delay = baseDelayMs * Math.pow(2, retries)
       retries++
-      setTimeout(attempt, delay)
+      retryTimeout = setTimeout(attempt, delay)
     })
   }
 
   attempt()
+
+  return {
+    cancel: () => {
+      if (retryTimeout) clearTimeout(retryTimeout)
+    },
+  }
 }
 
 /**

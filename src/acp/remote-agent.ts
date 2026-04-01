@@ -31,7 +31,7 @@ export const connectToRemoteAgent = ({
 
   let currentWs: WebSocketLike | null = null
 
-  connectWithReconnect({
+  const { cancel } = connectWithReconnect({
     createWebSocket: () => createWebSocket(url),
     onConnect: (ws) => {
       currentWs = ws
@@ -46,6 +46,7 @@ export const connectToRemoteAgent = ({
 
   return {
     disconnect: () => {
+      cancel()
       currentWs?.close()
       currentWs = null
     },

@@ -273,4 +273,40 @@ describe('connectWithReconnect', () => {
     getClock().tick(10000)
     expect(sockets).toHaveLength(4)
   })
+
+  test('cancel prevents a pending retry from firing', () => {
+    const sockets: MockWebSocket[] = []
+    const createWebSocket = mock(() => {
+      const ws = createMockWebSocket()
+      sockets.push(ws)
+      return ws
+    })
+    const onGiveUp = mock(() => {})
+
+    const { cancel } = connectWithReconnect({ onConnect: () => {}, onGiveUp, createWebSocket })
+
+    // Trigger an unexpected close to queue a retry
+    sockets[0]._trigger('close', { code: 1001 })
+    expect(sockets).toHaveLength(1)
+
+    // Cancel before the retry fires
+    cancel()
+    getClock().tick(2000)
+
+    // No new socket should have been created
+    expect(sockets).toHaveLength(1)
+    expect(onGiveUp).not.toHaveBeenCalled()
+  })
+
+  test('returns a cancel function', () => {
+    const ws = createMockWebSocket()
+    const result = connectWithReconnect({
+      onConnect: () => {},
+      onGiveUp: () => {},
+      createWebSocket: () => ws,
+    })
+
+    expect(result).toHaveProperty('cancel')
+    expect(typeof result.cancel).toBe('function')
+  })
 })
