@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { DynamicToolUIPart } from 'ai'
 import { createMessageAccumulator } from './message-accumulator'
 
 describe('createMessageAccumulator', () => {
@@ -53,8 +54,9 @@ describe('createMessageAccumulator', () => {
     })
 
     const msg1 = acc.buildMessage()
-    const toolPart = msg1.parts.find((p) => p.type.startsWith('tool-'))
+    const toolPart = msg1.parts.find((p) => p.type === 'dynamic-tool') as DynamicToolUIPart | undefined
     expect(toolPart).toBeDefined()
+    expect(toolPart?.toolName).toBe('get_weather')
 
     // Update with result
     acc.handleUpdate({
@@ -65,11 +67,11 @@ describe('createMessageAccumulator', () => {
     })
 
     const msg2 = acc.buildMessage()
-    const completedToolPart = msg2.parts.find((p) => p.type.startsWith('tool-'))
+    const completedToolPart = msg2.parts.find((p) => p.type === 'dynamic-tool') as DynamicToolUIPart | undefined
     expect(completedToolPart).toBeDefined()
-    if (completedToolPart && 'state' in completedToolPart) {
-      expect((completedToolPart as unknown as { state: string }).state).toBe('result')
-      expect((completedToolPart as unknown as { output: unknown }).output).toBe('Sunny, 72°F')
+    expect(completedToolPart?.state).toBe('output-available')
+    if (completedToolPart?.state === 'output-available') {
+      expect(completedToolPart.output).toBe('Sunny, 72°F')
     }
   })
 
@@ -104,7 +106,7 @@ describe('createMessageAccumulator', () => {
     const msg = acc.buildMessage()
     expect(msg.parts).toHaveLength(3) // reasoning, tool, text
     expect(msg.parts[0].type).toBe('reasoning')
-    expect(msg.parts[1].type).toStartWith('tool-')
+    expect(msg.parts[1].type).toBe('dynamic-tool')
     expect(msg.parts[2].type).toBe('text')
   })
 

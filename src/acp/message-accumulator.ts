@@ -1,6 +1,8 @@
 import type { SessionNotification } from '@agentclientprotocol/sdk'
 import type { HaystackDocumentMeta, HaystackReferenceMeta, ThunderboltUIMessage, UIMessageMetadata } from '@/types'
+import type { DynamicToolUIPart } from 'ai'
 import { v7 as uuidv7 } from 'uuid'
+import { z } from 'zod'
 
 type SessionUpdate = SessionNotification['update']
 
@@ -10,6 +12,38 @@ type ToolCallState = {
   status: 'pending' | 'in_progress' | 'completed' | 'failed'
   args: Record<string, unknown>
   result: unknown
+}
+
+const haystackReferenceSchema = z.object({
+  position: z.number(),
+  fileId: z.string(),
+  fileName: z.string(),
+  pageNumber: z.number().optional(),
+})
+
+const haystackMetaSchema = z.object({
+  haystackReferences: z.array(haystackReferenceSchema).optional(),
+  haystackDocuments: z
+    .array(
+      z.object({
+        id: z.string(),
+        content: z.string(),
+        score: z.number(),
+        file: z.object({ id: z.string(), name: z.string() }),
+      }),
+    )
+    .optional(),
+})
+
+const parseMeta = (
+  meta: unknown,
+): { haystackReferences?: HaystackReferenceMeta[]; haystackDocuments?: HaystackDocumentMeta[] } | null => {
+  const result = haystackMetaSchema.safeParse(meta)
+  if (!result.success) {
+    console.warn('[message-accumulator] _meta did not match expected shape:', result.error.flatten())
+    return null
+  }
+  return result.data
 }
 
 /**
@@ -39,22 +73,23 @@ export const createMessageAccumulator = (messageId?: string) => {
 
     // Add tool call parts
     for (const tc of toolCalls.values()) {
-      if (tc.status === 'completed' || tc.status === 'failed') {
-        parts.push({
-          type: `tool-${tc.toolName}` as `tool-${string}`,
-          toolCallId: tc.toolCallId,
-          state: 'result' as const,
-          input: tc.args,
-          output: tc.result,
-        } as unknown as ThunderboltUIMessage['parts'][number])
-      } else {
-        parts.push({
-          type: `tool-${tc.toolName}` as `tool-${string}`,
-          toolCallId: tc.toolCallId,
-          state: 'call' as const,
-          input: tc.args,
-        } as unknown as ThunderboltUIMessage['parts'][number])
+      const base = {
+        type: 'dynamic-tool' as const,
+        toolCallId: tc.toolCallId,
+        toolName: tc.toolName,
       }
+      const part: DynamicToolUIPart =
+        tc.status === 'completed'
+          ? { ...base, state: 'output-available' as const, input: tc.args, output: tc.result }
+          : tc.status === 'failed'
+            ? {
+                ...base,
+                state: 'output-error' as const,
+                input: tc.args,
+                errorText: String(tc.result ?? 'Unknown error'),
+              }
+            : { ...base, state: 'input-available' as const, input: tc.args }
+      parts.push(part)
     }
 
     // Add text part
@@ -98,8 +133,14 @@ export const createMessageAccumulator = (messageId?: string) => {
         if (update.content.type === 'text') {
           textContent += update.content.text
         }
-        if (update._meta?.haystackReferences) {
-          haystackReferences = update._meta.haystackReferences as HaystackReferenceMeta[]
+        if (update._meta) {
+          const meta = parseMeta(update._meta)
+          if (meta?.haystackReferences) {
+            haystackReferences = meta.haystackReferences
+          }
+          if (meta?.haystackDocuments) {
+            haystackDocuments = meta.haystackDocuments
+          }
         }
         break
 
