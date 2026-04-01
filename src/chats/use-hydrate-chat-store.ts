@@ -26,7 +26,7 @@ import type { AgentSessionState } from '@/acp/types'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useChatStore, type ChatSession } from './chat-store'
-import { createAcpSession, ensureAcpConnection } from './create-acp-session'
+import { createAcpSession, ensureAcpConnection as ensureAcpConnection_default } from './create-acp-session'
 
 /**
  * Compute which agents are unavailable on the current platform.
@@ -43,9 +43,15 @@ const getUnavailableAgentIds = (agents: Agent[]): Set<string> => {
 type UseHydrateChatStoreParams = {
   id: string
   isNew: boolean
+  /** Injectable for testing — defaults to the real ensureAcpConnection */
+  ensureAcpConnection?: typeof ensureAcpConnection_default
 }
 
-export const useHydrateChatStore = ({ id, isNew }: UseHydrateChatStoreParams) => {
+export const useHydrateChatStore = ({
+  id,
+  isNew,
+  ensureAcpConnection = ensureAcpConnection_default,
+}: UseHydrateChatStoreParams) => {
   const db = useDatabase()
   const navigate = useNavigate()
 
@@ -162,17 +168,16 @@ export const useHydrateChatStore = ({ id, isNew }: UseHydrateChatStoreParams) =>
     // For existing chats, use the agent stored on the thread rather than the global setting.
     // This ensures switching chats shows the correct agent in the selector.
     // Fall back to first available agent if no selected agent (e.g. when enabled types exclude built-in).
-    let agentForSession = selectedAgent ?? agents[0]
-    if (!agentForSession) {
+    const fallbackAgent = selectedAgent ?? agents[0]
+    if (!fallbackAgent) {
       console.error('No agents available — check VITE_ENABLED_AGENT_TYPES and agent configuration')
       return
     }
-    if (chatThread?.agentId && chatThread.agentId !== agentForSession.id) {
-      const threadAgent = await getAgent(db, chatThread.agentId)
-      if (threadAgent) {
-        agentForSession = threadAgent
-      }
-    }
+
+    const threadAgentOverride =
+      chatThread?.agentId && chatThread.agentId !== fallbackAgent.id ? await getAgent(db, chatThread.agentId) : null
+
+    const agentForSession = threadAgentOverride ?? fallbackAgent
 
     const agentAvailable = isAgentAvailableOnPlatform(agentForSession.type)
     const isBuiltIn = agentForSession.type === 'built-in'
@@ -180,22 +185,24 @@ export const useHydrateChatStore = ({ id, isNew }: UseHydrateChatStoreParams) =>
     // Built-in agents connect eagerly during hydration (instant, in-process).
     // Non-built-in agents create the session with null acpClient, then
     // connect eagerly in the background after the session is created.
-    let acpClient: import('@/acp/client').AcpClient | null = null
-    let sessionState: AgentSessionState = { sessionId: '', availableModes: [], currentModeId: null, configOptions: [] }
-
-    if (isBuiltIn) {
-      const result = await createAcpSession({
-        chatId: id,
-        agent: agentForSession,
-        modes,
-        models,
-        selectedModeId: selectedMode.id,
-        selectedModelId: defaultModel.id,
-        mcpClients,
-      })
-      acpClient = result.acpClient
-      sessionState = result.sessionState
+    const emptySessionState: AgentSessionState = {
+      sessionId: '',
+      availableModes: [],
+      currentModeId: null,
+      configOptions: [],
     }
+
+    const { acpClient, sessionState } = isBuiltIn
+      ? await createAcpSession({
+          chatId: id,
+          agent: agentForSession,
+          modes,
+          models,
+          selectedModeId: selectedMode.id,
+          selectedModelId: defaultModel.id,
+          mcpClients,
+        })
+      : { acpClient: null, sessionState: emptySessionState }
 
     // For non-built-in agents, derive mode/model from ACP session instead of DB
     const isExternalAgent = !isBuiltIn
@@ -238,8 +245,10 @@ export const useHydrateChatStore = ({ id, isNew }: UseHydrateChatStoreParams) =>
     // Non-built-in agents that are available on this platform:
     // start connecting eagerly so mode/model selectors populate ASAP.
     if (!isBuiltIn && agentAvailable) {
-      ensureAcpConnection(id)
-        .then(() => {
+      void (async () => {
+        try {
+          await ensureAcpConnection(id)
+
           const { sessions, updateSession: update } = useChatStore.getState()
           const s = sessions.get(id)
           if (!s) {
@@ -264,11 +273,11 @@ export const useHydrateChatStore = ({ id, isNew }: UseHydrateChatStoreParams) =>
           }
 
           update(id, updates)
-        })
-        .catch((err) => {
+        } catch (err) {
           console.error(`Eager ACP connection failed for session ${id}:`, err)
           useChatStore.getState().setSessionStatus(id, 'error', err instanceof Error ? err : new Error(String(err)))
-        })
+        }
+      })()
     }
   }
 

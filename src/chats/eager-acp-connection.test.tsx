@@ -12,69 +12,8 @@ import { getModel } from '@/dal/models'
 import { createElement, type ReactNode } from 'react'
 import { BrowserRouter } from 'react-router'
 import { MCPProvider } from '@/lib/mcp-provider'
-
-// Mock ensureAcpConnection — must be before useHydrateChatStore import
-const mockEnsureAcpConnection = mock((_sessionId: string) => Promise.resolve(createMockAcpClient()))
-
-mock.module('./create-acp-session', () => {
-  // Inline a minimal createAcpSession for built-in agents.
-  // Avoid importing use-acp-chat here to prevent circular deps with the mocked module.
-  const { createInProcessStreams } = require('@/acp/streams')
-  const { createBuiltInAgent } = require('@/acp/built-in-agent')
-  const { createAcpClient } = require('@/acp/client')
-  const { AgentSideConnection } = require('@agentclientprotocol/sdk')
-  const chatStore = require('./chat-store')
-
-  return {
-    createAcpSession: async ({
-      chatId,
-      agent,
-      modes,
-      models,
-      selectedModeId,
-      selectedModelId,
-    }: {
-      chatId: string
-      agent: { type: string }
-      modes: unknown[]
-      models: unknown[]
-      selectedModeId: string
-      selectedModelId: string
-      mcpClients: unknown[]
-    }) => {
-      if (agent.type !== 'built-in') {
-        throw new Error(`Test mock only supports built-in agents, got: ${agent.type}`)
-      }
-      const { clientStream, agentStream } = createInProcessStreams()
-      const agentHandler = createBuiltInAgent({
-        getModes: () => modes,
-        getModels: () => models,
-        getSelectedModeId: () => {
-          const session = chatStore.useChatStore.getState().sessions.get(chatId)
-          return session?.currentModeId ?? selectedModeId
-        },
-        getSelectedModelId: () => {
-          const session = chatStore.useChatStore.getState().sessions.get(chatId)
-          return session?.selectedModel?.id ?? selectedModelId
-        },
-        onModeChange: () => {},
-        onModelChange: () => {},
-        runPrompt: async () => {},
-      })
-      const acpClient = createAcpClient({
-        stream: clientStream,
-        onSessionUpdate: () => {},
-      })
-      new AgentSideConnection(agentHandler, agentStream)
-      await acpClient.initialize()
-      const sessionState = await acpClient.createSession()
-      return { acpClient, sessionState }
-    },
-    ensureAcpConnection: (sessionId: string) => mockEnsureAcpConnection(sessionId),
-  }
-})
-
 import { useHydrateChatStore } from './use-hydrate-chat-store'
+import type { AcpClient } from '@/acp/client'
 
 const createDefaultMode = async () => {
   const db = getDb()
@@ -196,14 +135,15 @@ describe('eager ACP connection', () => {
     await teardownTestDatabase()
   })
 
+  let mockEnsureAcpConnection: ReturnType<typeof mock<(sessionId: string) => Promise<AcpClient>>>
+
   beforeEach(async () => {
     resetStore()
     await resetTestDatabase()
     await createDefaultMode()
     await createSystemModel()
     await createDefaultAgent()
-    mockEnsureAcpConnection.mockReset()
-    mockEnsureAcpConnection.mockImplementation(() => Promise.resolve(createMockAcpClient()))
+    mockEnsureAcpConnection = mock((_sessionId: string) => Promise.resolve(createMockAcpClient()))
   })
 
   afterEach(async () => {
@@ -216,9 +156,10 @@ describe('eager ACP connection', () => {
     const systemModelId = await createSystemModel()
     const threadId = await createTestThread(systemModelId, 'Built-in Test')
 
-    const { result } = renderHook(() => useHydrateChatStore({ id: threadId, isNew: false }), {
-      wrapper: TestWrapper,
-    })
+    const { result } = renderHook(
+      () => useHydrateChatStore({ id: threadId, isNew: false, ensureAcpConnection: mockEnsureAcpConnection }),
+      { wrapper: TestWrapper },
+    )
 
     await act(async () => {
       await result.current.hydrateChatStore()
@@ -235,9 +176,10 @@ describe('eager ACP connection', () => {
     const remoteAgentId = await createRemoteAgent()
     const threadId = await createTestThread(systemModelId, 'Remote Agent Test', remoteAgentId)
 
-    const { result } = renderHook(() => useHydrateChatStore({ id: threadId, isNew: false }), {
-      wrapper: TestWrapper,
-    })
+    const { result } = renderHook(
+      () => useHydrateChatStore({ id: threadId, isNew: false, ensureAcpConnection: mockEnsureAcpConnection }),
+      { wrapper: TestWrapper },
+    )
 
     await act(async () => {
       await result.current.hydrateChatStore()
@@ -259,9 +201,10 @@ describe('eager ACP connection', () => {
     const localAgentId = await createLocalAgent()
     const threadId = await createTestThread(systemModelId, 'Web Local Agent Test', localAgentId)
 
-    const { result } = renderHook(() => useHydrateChatStore({ id: threadId, isNew: false }), {
-      wrapper: TestWrapper,
-    })
+    const { result } = renderHook(
+      () => useHydrateChatStore({ id: threadId, isNew: false, ensureAcpConnection: mockEnsureAcpConnection }),
+      { wrapper: TestWrapper },
+    )
 
     await act(async () => {
       await result.current.hydrateChatStore()
@@ -273,15 +216,16 @@ describe('eager ACP connection', () => {
   })
 
   it('should set status to error when eager connection fails', async () => {
-    mockEnsureAcpConnection.mockImplementation(() => Promise.reject(new Error('Connection timeout')))
+    mockEnsureAcpConnection = mock((_sessionId: string) => Promise.reject(new Error('Connection timeout')))
 
     const systemModelId = await createSystemModel()
     const remoteAgentId = await createRemoteAgent()
     const threadId = await createTestThread(systemModelId, 'Error Test', remoteAgentId)
 
-    const { result } = renderHook(() => useHydrateChatStore({ id: threadId, isNew: false }), {
-      wrapper: TestWrapper,
-    })
+    const { result } = renderHook(
+      () => useHydrateChatStore({ id: threadId, isNew: false, ensureAcpConnection: mockEnsureAcpConnection }),
+      { wrapper: TestWrapper },
+    )
 
     await act(async () => {
       await result.current.hydrateChatStore()
@@ -302,9 +246,10 @@ describe('eager ACP connection', () => {
     const remoteAgentId = await createRemoteAgent()
     const threadId = await createTestThread(systemModelId, 'Success Test', remoteAgentId)
 
-    const { result } = renderHook(() => useHydrateChatStore({ id: threadId, isNew: false }), {
-      wrapper: TestWrapper,
-    })
+    const { result } = renderHook(
+      () => useHydrateChatStore({ id: threadId, isNew: false, ensureAcpConnection: mockEnsureAcpConnection }),
+      { wrapper: TestWrapper },
+    )
 
     await act(async () => {
       await result.current.hydrateChatStore()
