@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import type { HaystackPipelineConfig } from '@/haystack/types'
+export type { HaystackPipelineConfig }
 
 /**
  * Settings schema for environment variables validation
@@ -172,9 +174,6 @@ export const getCorsMethodsList = (settings: Settings): string[] => {
     .map((method) => method.trim())
     .filter((method) => method.length > 0)
 }
-
-import type { HaystackPipelineConfig } from '@/haystack/types'
-export type { HaystackPipelineConfig }
 
 const haystackPipelineConfigSchema = z.object({
   slug: z.string(),
