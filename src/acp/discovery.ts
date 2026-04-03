@@ -1,5 +1,6 @@
-import ky from 'ky'
+import ky, { type KyInstance } from 'ky'
 import { isAgentTypeEnabled } from '@/lib/enabled-agent-types'
+import { getAuthToken } from '@/lib/auth-token'
 import { hashAgent } from '@/defaults/agents'
 import { agentsTable } from '@/db/tables'
 import { eq, inArray, isNotNull, isNull, and } from 'drizzle-orm'
@@ -55,9 +56,24 @@ type RegistryResponse = {
   }>
 }
 
-const fetchRemoteAgentDescriptors = async (cloudUrl: string): Promise<RemoteAgentDescriptor[]> => {
+type DiscoveryDeps = {
+  getAuthToken?: () => string | null
+  httpClient?: KyInstance
+}
+
+export const fetchRemoteAgentDescriptors = async (
+  cloudUrl: string,
+  deps: DiscoveryDeps = {},
+): Promise<RemoteAgentDescriptor[]> => {
+  const { getAuthToken: getToken = getAuthToken, httpClient = ky } = deps
   try {
-    const data = await ky.get(`${cloudUrl}/agents`).json<RegistryResponse>()
+    const token = getToken()
+    const data = await httpClient
+      .get(`${cloudUrl}/agents`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      })
+      .json<RegistryResponse>()
     // Backend returns registry format — extract only remote agents
     const remoteEntries = (data.agents ?? []).filter((a) => a.distribution.remote)
     console.info(`[discovery] Fetched ${remoteEntries.length} remote agents from ${cloudUrl}/agents`)
