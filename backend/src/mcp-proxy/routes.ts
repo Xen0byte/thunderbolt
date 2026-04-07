@@ -13,7 +13,7 @@ const maxBodyBytes = 10 * 1024 * 1024
 /** Proxy request timeout (30s — MCP operations can be slower than typical API calls). */
 const proxyTimeoutMs = 30_000
 
-/** Headers to strip from proxied MCP requests. Keeps Authorization and MCP headers. */
+/** Headers to strip from proxied MCP requests before forwarding to the target server. */
 const mcpRequestDenylist = [
   'host',
   'connection',
@@ -21,7 +21,9 @@ const mcpRequestDenylist = [
   'upgrade',
   'content-length',
   'cookie',
+  'authorization',
   'x-mcp-target-url',
+  'x-mcp-authorization',
   /^proxy-/i,
   /^x-forwarded-/i,
   'x-real-ip',
@@ -51,6 +53,14 @@ const handleProxy = async (
   const base = targetBaseUrl.replace(/\/+$/, '')
   const url = subPath ? `${base}/${subPath}${queryString}` : `${base}${queryString}`
   const headers = filterHeaders(ctx.headers, mcpRequestDenylist)
+
+  // Remap X-Mcp-Authorization → Authorization for the target MCP server.
+  // The frontend moves the MCP server's auth here so the proxy's own
+  // Authorization header can carry the Thunderbolt session token.
+  const mcpAuth = ctx.headers['x-mcp-authorization']
+  if (mcpAuth) {
+    headers['authorization'] = mcpAuth
+  }
 
   // Enforce request body size limit
   const requestContentLength = ctx.headers['content-length']
