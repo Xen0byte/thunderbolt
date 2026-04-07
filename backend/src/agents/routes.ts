@@ -3,8 +3,8 @@ import { getSettings, getHaystackPipelines, getEnabledAgentIds } from '@/config/
 import { createHaystackProvider } from './haystack-provider'
 import type { AgentProvider } from './types'
 
-const ACP_REGISTRY_URL = 'https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json'
-const REGISTRY_CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
+const acpRegistryUrl = 'https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json'
+const registryCacheTtlMs = 60 * 60 * 1000 // 1 hour
 
 type RegistryEntry = {
   id: string
@@ -30,12 +30,12 @@ type RegistryResponse = {
 let registryCache: { data: RegistryEntry[]; fetchedAt: number } | null = null
 
 const fetchRegistryEntries = async (): Promise<RegistryEntry[]> => {
-  if (registryCache && Date.now() - registryCache.fetchedAt < REGISTRY_CACHE_TTL_MS) {
+  if (registryCache && Date.now() - registryCache.fetchedAt < registryCacheTtlMs) {
     return registryCache.data
   }
 
   try {
-    const response = await fetch(ACP_REGISTRY_URL)
+    const response = await fetch(acpRegistryUrl)
     if (!response.ok) {
       console.warn(`Failed to fetch ACP registry: ${response.status}`)
       return registryCache?.data ?? []
