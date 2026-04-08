@@ -193,7 +193,7 @@ class McpOAuthClientProvider implements OAuthClientProvider {
       const state = callbackUrl.searchParams.get('state')
       const error = callbackUrl.searchParams.get('error')
 
-      if (this.stateNonce && state !== this.stateNonce) {
+      if (!this.stateNonce || state !== this.stateNonce) {
         rejectPromise(new Error('OAuth state mismatch — possible CSRF attack'))
       } else if (error) {
         rejectPromise(new Error(callbackUrl.searchParams.get('error_description') || error))

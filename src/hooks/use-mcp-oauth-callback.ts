@@ -85,9 +85,8 @@ export const useMcpOAuthCallback = () => {
 
         const fetchFn = await createOAuthFetch(oauthState.serverUrl)
 
-        const { discoverOAuthMetadata, exchangeAuthorization } = await import(
-          '@modelcontextprotocol/sdk/client/auth.js'
-        )
+        const { discoverOAuthMetadata, exchangeAuthorization } =
+          await import('@modelcontextprotocol/sdk/client/auth.js')
 
         const metadata = await discoverOAuthMetadata(oauthState.serverUrl, {}, fetchFn)
         if (!metadata) {
