@@ -30,22 +30,19 @@ type ContentViewContextType = {
 
 const ContentViewContext = createContext<ContentViewContextType | undefined>(undefined)
 
-type ContentViewProviderProps = {
-  children: ReactNode
-  initialSideviewType?: string | null
-  initialSideviewId?: string | null
-}
-
 /**
  * Unified provider for managing the content view
  *
  * The content view can display:
  * - Object views (tool call results)
  * - Webview previews (link previews)
- * - Sideviews (email detail, task detail, etc)
- *
- * Optionally accepts initial sideview state to open on mount
  */
+type ContentViewProviderProps = {
+  children: ReactNode
+  initialSideviewType?: string | null
+  initialSideviewId?: string | null
+}
+
 export const ContentViewProvider = ({ children, initialSideviewType, initialSideviewId }: ContentViewProviderProps) => {
   const [state, setState] = useState<ContentViewState>(() =>
     initialSideviewType && initialSideviewId
@@ -81,18 +78,6 @@ export const ContentViewProvider = ({ children, initialSideviewType, initialSide
     })
   }, [])
 
-  const showPreview = useCallback((url: string) => {
-    trackEvent('content_view_open', { view_type: 'preview' })
-    trackEvent('preview_open')
-    setState({
-      type: 'preview',
-      data: {
-        url,
-        onClose: () => setState({ type: null, data: null }),
-      },
-    })
-  }, [])
-
   const showSideview = useCallback((sideviewType: string | null, sideviewId: string | null) => {
     if (sideviewType === null || sideviewId === null) {
       setState({ type: null, data: null })
@@ -103,6 +88,18 @@ export const ContentViewProvider = ({ children, initialSideviewType, initialSide
         data: { sideviewType, sideviewId },
       })
     }
+  }, [])
+
+  const showPreview = useCallback((url: string) => {
+    trackEvent('content_view_open', { view_type: 'preview' })
+    trackEvent('preview_open')
+    setState({
+      type: 'preview',
+      data: {
+        url,
+        onClose: () => setState({ type: null, data: null }),
+      },
+    })
   }, [])
 
   const close = useCallback(() => {

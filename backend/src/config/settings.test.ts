@@ -183,7 +183,7 @@ describe('Config Settings', () => {
           oidcIssuer: '',
           betterAuthUrl: 'http://localhost:8000',
           corsOrigins: 'http://localhost:1420',
-          corsOriginRegex: '',
+          corsOriginRegex: null,
           corsAllowCredentials: true,
           corsAllowMethods: 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
           corsAllowHeaders:

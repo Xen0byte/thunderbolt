@@ -1,5 +1,3 @@
-import { EmailThreadView } from './thread'
-import { useQuery } from '@tanstack/react-query'
 import { useSideview } from './context'
 import { parseDocumentSideviewId } from '@/types/citation'
 import { lazy, Suspense } from 'react'
@@ -15,32 +13,7 @@ const PdfSidebarViewer = lazy(() =>
 export const Sideview = () => {
   const { sideviewId, sideviewType } = useSideview()
 
-  const { data: _object } = useQuery({
-    queryKey: ['sideview', sideviewType, sideviewId],
-    queryFn: async () => {
-      if (!sideviewId || !sideviewType) {
-        return null
-      }
-
-      switch (sideviewType) {
-        case 'message':
-          // @todo re-implement this
-          return null
-        case 'thread':
-          // @todo re-implement this
-          return null
-        default:
-          return null
-      }
-    },
-    enabled: !!sideviewId && !!sideviewType,
-  })
-
   switch (sideviewType) {
-    case 'message':
-      return <EmailThreadView />
-    case 'thread':
-      return <EmailThreadView />
     case 'document': {
       if (!sideviewId) {
         return null
@@ -59,6 +32,6 @@ export const Sideview = () => {
       )
     }
     default:
-      return <div>Unsupported sideview type</div>
+      return null
   }
 }

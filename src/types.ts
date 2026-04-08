@@ -28,8 +28,6 @@ export type InitData = {
   db: AnyDrizzleDatabase
   tray: TrayIcon | undefined
   window: Window | undefined
-  sideviewType: SideviewType | null
-  sideviewId: string | null
   posthogClient: PostHog | null
   httpClient: HttpClient
   experimentalFeatureTasks: boolean
