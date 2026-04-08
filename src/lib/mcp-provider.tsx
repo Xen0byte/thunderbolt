@@ -1,10 +1,9 @@
 import { createMCPClient } from '@ai-sdk/mcp'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createCredentialStore } from './mcp-auth'
-import type { McpOAuthClientProvider } from './mcp-auth/oauth-client-provider'
 import { createTransport } from './mcp-transports'
 import { useDatabase } from '@/contexts'
-import type { McpClient, McpServerConfig, McpServerConnection } from '@/types/mcp'
+import type { CredentialStore, McpClient, McpServerConfig, McpServerConnection, McpTransportResult } from '@/types/mcp'
 
 type MCPContextType = {
   servers: McpServerConnection[]
@@ -20,6 +19,46 @@ const MCPContext = createContext<MCPContextType | undefined>(undefined)
 
 const reconnectDelays = [2000, 4000, 8000, 16000, 32000, 60000]
 const maxAttempts = reconnectDelays.length
+
+/**
+ * Owns the transport lifecycle during OAuth discovery.
+ * Returns a valid transport + authProvider, or closes the transport and returns an error.
+ */
+const discoverOAuth = async (
+  server: McpServerConfig,
+  credentialStore: CredentialStore,
+  cloudUrl: string,
+): Promise<
+  | { transport: { close(): Promise<void> }; authProvider: NonNullable<McpTransportResult['authProvider']> }
+  | { error: string }
+> => {
+  const result = await createTransport(server, credentialStore, { cloudUrl })
+  try {
+    const provider = result.authProvider
+    if (!provider) {
+      await result.transport.close()
+      return { error: 'Server does not require OAuth' }
+    }
+
+    try {
+      await createMCPClient({ transport: result.transport })
+      await result.transport.close()
+      return { error: 'Server connected without requiring OAuth' }
+    } catch {
+      // Expected — SDK discovered OAuth and stored pendingAuthUrl
+    }
+
+    if (!provider.pendingAuthUrl) {
+      await result.transport.close()
+      return { error: 'Could not discover OAuth authorization URL' }
+    }
+
+    return { transport: result.transport, authProvider: provider }
+  } catch (err) {
+    await result.transport.close()
+    throw err
+  }
+}
 
 export const MCPProvider = ({ children }: { children: ReactNode }) => {
   const db = useDatabase()
@@ -228,64 +267,29 @@ export const MCPProvider = ({ children }: { children: ReactNode }) => {
       prev.map((s) => (s.id === serverId ? { ...s, errorMessage: 'Discovering OAuth endpoints...' } : s)),
     )
 
-    // Step 1: Attempt connection to trigger SDK OAuth discovery
-    const discoveryResult = await (async () => {
-      const result = await createTransport(server, credentialStoreRef.current, {
-        cloudUrl: cloudUrlRef.current,
-      })
-      const provider = result.authProvider as McpOAuthClientProvider | undefined
-      if (!provider) {
-        await result.transport.close()
-        return { error: 'Server does not require OAuth' } as const
-      }
-
-      try {
-        await createMCPClient({ transport: result.transport })
-        await result.transport.close()
-        return { error: 'Server connected without requiring OAuth' } as const
-      } catch {
-        // Expected — SDK discovered OAuth and stored pendingAuthUrl
-      }
-
-      // Only store transport on the success path (OAuth discovery completed)
-      transportRefs.current.set(serverId, result.transport)
-      return { transport: result.transport, authProvider: provider } as const
-    })().catch(async (err) => {
-      // Clean up any transport that may have been stored before the error
-      const storedTransport = transportRefs.current.get(serverId)
-      if (storedTransport) {
-        await storedTransport.close()
-        transportRefs.current.delete(serverId)
-      }
-      return { error: err instanceof Error ? err.message : 'OAuth discovery failed' } as const
-    })
+    const discoveryResult = await discoverOAuth(server, credentialStoreRef.current, cloudUrlRef.current).catch(
+      (err) => ({ error: err instanceof Error ? err.message : 'OAuth discovery failed' }),
+    )
 
     if ('error' in discoveryResult) {
-      setServers((prev) =>
-        prev.map((s) => (s.id === serverId ? { ...s, errorMessage: discoveryResult.error ?? null } : s)),
-      )
+      setServers((prev) => prev.map((s) => (s.id === serverId ? { ...s, errorMessage: discoveryResult.error } : s)))
       return
     }
 
     const { transport, authProvider } = discoveryResult
 
-    if (!authProvider.pendingAuthUrl) {
-      setServers((prev) =>
-        prev.map((s) => (s.id === serverId ? { ...s, errorMessage: 'Could not discover OAuth authorization URL' } : s)),
-      )
-      return
-    }
+    // Commit transport — authorizeServer now owns its lifecycle via transportRefs
+    transportRefs.current.set(serverId, transport)
 
-    // Step 2: Redirect the user
-    setServers((prev) =>
-      prev.map((s) => (s.id === serverId ? { ...s, errorMessage: 'Waiting for authorization...' } : s)),
-    )
-
-    await authProvider.startOAuthRedirect()
-
-    // On web, the page navigates away — nothing more to do here.
-    // On desktop/mobile, the browser opened and we need to wait for the code.
     try {
+      setServers((prev) =>
+        prev.map((s) => (s.id === serverId ? { ...s, errorMessage: 'Waiting for authorization...' } : s)),
+      )
+
+      await authProvider.startOAuthRedirect()
+
+      // On web, the page navigates away — nothing more to do here.
+      // On desktop/mobile, the browser opened and we need to wait for the code.
       const code = await authProvider.waitForAuthCode()
       const httpTransport = transport as unknown as { finishAuth(code: string): Promise<void> }
       await httpTransport.finishAuth(code)
