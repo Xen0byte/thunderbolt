@@ -77,9 +77,7 @@ export const useMcpSync = () => {
         }
 
         const newConfig = buildServerConfig(dbServer)
-        const configChanged =
-          JSON.stringify(providerServer.transport) !== JSON.stringify(newConfig.transport) ||
-          providerServer.auth.authType !== newConfig.auth.authType
+        const configChanged = JSON.stringify(providerServer.transport) !== JSON.stringify(newConfig.transport)
 
         if (configChanged) {
           await removeServer(dbServer.id)
