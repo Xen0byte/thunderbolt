@@ -61,6 +61,23 @@ const getValue = async <T extends StorableValue>(id: string): Promise<T | null> 
   })
 }
 
+const getEntries = async <T extends StorableValue>(ids: string[]): Promise<Array<T | null>> => {
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly')
+    const store = tx.objectStore(storeName)
+    const requests = ids.map((id) => store.get(id))
+    tx.oncomplete = () => {
+      db.close()
+      resolve(requests.map((r) => (r.result as T) ?? null))
+    }
+    tx.onerror = () => {
+      db.close()
+      reject(new StorageError('Failed to get keys', { cause: tx.error }))
+    }
+  })
+}
+
 const deleteKey = async (id: string): Promise<void> => {
   const db = await openDB()
   return new Promise((resolve, reject) => {
@@ -140,16 +157,23 @@ export const storeKeyPair = async (
     { id: mlkemSecretKeyId, value: mlkemSecretKey },
   ])
 
-/** Get both key pairs from IndexedDB. Returns null if any key is missing. */
+/** Get both key pairs from IndexedDB (single transaction). Returns null if any key is missing. */
 export const getKeyPair = async (): Promise<StoredKeyPair | null> => {
-  const ecdhPrivateKey = await getValue<CryptoKey>(privateKeyId)
-  const ecdhPublicKey = await getValue<CryptoKey>(publicKeyId)
-  const mlkemPublicKey = await getValue<Uint8Array>(mlkemPublicKeyId)
-  const mlkemSecretKey = await getValue<Uint8Array>(mlkemSecretKeyId)
+  const [ecdhPrivateKey, ecdhPublicKey, mlkemPublicKey, mlkemSecretKey] = await getEntries<StorableValue>([
+    privateKeyId,
+    publicKeyId,
+    mlkemPublicKeyId,
+    mlkemSecretKeyId,
+  ])
   if (!ecdhPrivateKey || !ecdhPublicKey || !mlkemPublicKey || !mlkemSecretKey) {
     return null
   }
-  return { ecdhPrivateKey, ecdhPublicKey, mlkemPublicKey, mlkemSecretKey }
+  return {
+    ecdhPrivateKey: ecdhPrivateKey as CryptoKey,
+    ecdhPublicKey: ecdhPublicKey as CryptoKey,
+    mlkemPublicKey: mlkemPublicKey as Uint8Array,
+    mlkemSecretKey: mlkemSecretKey as Uint8Array,
+  }
 }
 
 // =============================================================================
