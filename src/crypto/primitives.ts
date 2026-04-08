@@ -12,6 +12,8 @@ const hkdfHash = 'SHA-256'
 // Hybrid envelope constants
 const envelopeVersion = 0x01
 const mlkemCiphertextLength = 1088
+const aesKwWrappedKeyLength = 40 // AES-KW(256-bit key) = 32 + 8
+const minEnvelopeLength = 1 + ephemeralPubKeyLength + mlkemCiphertextLength + aesKwWrappedKeyLength
 const hybridHkdfInfo = new TextEncoder().encode('thunderbolt-hybrid-ck-wrap-v1')
 
 // =============================================================================
@@ -211,6 +213,10 @@ const unwrapCKInternal = async (
     const version = envelope[0]
     if (version !== envelopeVersion) {
       throw new DecryptionError(`Unsupported envelope version: ${version}`)
+    }
+
+    if (envelope.length < minEnvelopeLength) {
+      throw new DecryptionError(`Invalid envelope: ${envelope.length} bytes, need >= ${minEnvelopeLength}`)
     }
 
     let offset = 1
