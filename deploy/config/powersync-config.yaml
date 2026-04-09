@@ -1,12 +1,12 @@
 replication:
   connections:
     - type: postgresql
-      uri: postgresql://powersync_role:myhighlyrandompassword@postgres:5432/postgres
+      uri: ${PS_PG_URI|postgresql://powersync_role:myhighlyrandompassword@postgres:5432/postgres}
       sslmode: disable
 
 storage:
   type: mongodb
-  uri: mongodb://mongo:27017/powersync
+  uri: ${PS_MONGO_URI|mongodb://mongo:27017/powersync}
 
 port: 8080
 

@@ -25,10 +25,10 @@ export const createStorage = (name: string, vpcId: pulumi.Input<string>, subnetI
 
   const pgAccessPoint = new aws.efs.AccessPoint(`${name}-pg-ap`, {
     fileSystemId: efs.id,
-    posixUser: { uid: 999, gid: 999 }, // postgres user
+    posixUser: { uid: 70, gid: 70 }, // postgres user on Alpine
     rootDirectory: {
       path: '/postgres-data',
-      creationInfo: { ownerUid: 999, ownerGid: 999, permissions: '700' },
+      creationInfo: { ownerUid: 70, ownerGid: 70, permissions: '700' },
     },
     tags: { Name: `${name}-pg` },
   })

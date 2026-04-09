@@ -118,7 +118,7 @@ export const createServices = (args: ServiceArgs) => {
         efsVolumeConfiguration: {
           fileSystemId: efsId,
           transitEncryption: 'ENABLED',
-          authorizationConfig: { accessPointId: pgAccessPointId, iam: 'ENABLED' },
+          authorizationConfig: { accessPointId: pgAccessPointId },
         },
       },
     ],
@@ -168,7 +168,7 @@ export const createServices = (args: ServiceArgs) => {
         efsVolumeConfiguration: {
           fileSystemId: efsId,
           transitEncryption: 'ENABLED',
-          authorizationConfig: { accessPointId: mongoAccessPointId, iam: 'ENABLED' },
+          authorizationConfig: { accessPointId: mongoAccessPointId },
         },
       },
     ],
@@ -250,6 +250,10 @@ export const createServices = (args: ServiceArgs) => {
         name: 'powersync',
         image: args.images.powersync,
         essential: true,
+        environment: [
+          { name: 'PS_PG_URI', value: pulumi.interpolate`postgresql://powersync_role:myhighlyrandompassword@postgres.thunderbolt.local:5432/postgres` },
+          { name: 'PS_MONGO_URI', value: 'mongodb://mongo.thunderbolt.local:27017/powersync' },
+        ],
         portMappings: [{ containerPort: 8080 }],
         logConfiguration: logConfig('powersync'),
         ...(repositoryCredentials && { repositoryCredentials }),
