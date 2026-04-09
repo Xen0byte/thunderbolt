@@ -15,6 +15,7 @@ type Secrets = {
   keycloakAdminPassword: pulumi.Output<string>
   oidcClientSecret: pulumi.Output<string>
   powersyncJwtSecret: pulumi.Output<string>
+  betterAuthSecret: pulumi.Output<string>
 }
 
 type ServiceArgs = {
@@ -340,6 +341,7 @@ export const createServices = (args: ServiceArgs) => {
           { name: 'OIDC_CLIENT_ID', value: 'thunderbolt-app' },
           { name: 'OIDC_CLIENT_SECRET', value: args.secrets.oidcClientSecret },
           { name: 'BETTER_AUTH_URL', value: pulumi.interpolate`http://${args.albDnsName}` },
+          { name: 'BETTER_AUTH_SECRET', value: args.secrets.betterAuthSecret },
           { name: 'APP_URL', value: pulumi.interpolate`http://${args.albDnsName}` },
           { name: 'TRUSTED_ORIGINS', value: pulumi.interpolate`http://${args.albDnsName}` },
           { name: 'CORS_ORIGINS', value: pulumi.interpolate`http://${args.albDnsName}` },

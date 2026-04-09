@@ -3,6 +3,7 @@ import type { db as DbType } from '@/db/client'
 import * as schema from '@/db/schema'
 import { normalizeEmail } from '@/lib/email'
 import { getSettings } from '@/config/settings'
+import { getTrustedIpHeaders } from '@/utils/request'
 import { createAuthMiddleware } from 'better-auth/api'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
@@ -58,13 +59,36 @@ const buildOidcPlugins = () => {
   ]
 }
 
-export const createAuth = (database: typeof DbType) =>
-  betterAuth({
+export const createAuth = (database: typeof DbType) => {
+  const settings = getSettings()
+
+  if (!settings.trustedProxy && process.env.NODE_ENV === 'production') {
+    console.warn(
+      'TRUSTED_PROXY is not set. Better Auth rate limiting will use x-forwarded-for ' +
+        'which is spoofable without a trusted proxy. Set TRUSTED_PROXY=cloudflare (or akamai) ' +
+        'to ensure rate limiting uses the correct client IP header.',
+    )
+  }
+
+  return betterAuth({
     database: drizzleAdapter(database, {
       provider: 'pg',
       schema,
     }),
     trustedOrigins,
+    // NOTE: Uses in-memory storage by default — not shared across instances in
+    // horizontally-scaled deployments. Provides single-instance defence only.
+    // TODO(THU-113): Replace with proof-of-work challenge (ALTCHA) for distributed protection.
+    rateLimit: {
+      enabled: true,
+      window: 60,
+      max: 10,
+    },
+    advanced: {
+      ipAddress: {
+        ipAddressHeaders: getTrustedIpHeaders(settings.trustedProxy),
+      },
+    },
     user: {
       additionalFields: {
         isNew: {
@@ -108,11 +132,16 @@ export const createAuth = (database: typeof DbType) =>
       }),
     },
     plugins: [
-      bearer(), // Enables Authorization: Bearer <token> for mobile apps where cookies don't work
+      bearer({ requireSignature: true }), // Enables Authorization: Bearer <token> for mobile apps where cookies don't work
       emailOTP({
         otpLength: 6,
         expiresIn: 300, // 5 minutes
         allowedAttempts: 3, // Built-in rate limiting - returns TOO_MANY_ATTEMPTS after exceeded
+        resendStrategy: 'reuse', // Preserves attempt counter on resend (prevents reset-by-resend attack).
+        // Known limitation: once all attempts are exhausted, Better Auth falls through to
+        // a fresh OTP with counter=0. Better Auth's HTTP rate limiter does NOT apply to
+        // server-side auth.api calls (e.g. from /waitlist/join), so OTP regeneration via
+        // that path is currently unthrottled. TODO(THU-113): proof-of-work will close this gap.
 
         async sendVerificationOTP({ email, otp, type }, ctx) {
           // We only support sign-in (no password-based auth, so no email-verification or forget-password)
@@ -160,5 +189,6 @@ export const createAuth = (database: typeof DbType) =>
       ...buildOidcPlugins(),
     ],
   })
+}
 
 export type Auth = ReturnType<typeof createAuth>

@@ -29,6 +29,7 @@ const secrets = {
   keycloakAdminPassword: config.getSecret('keycloakAdminPassword') ?? pulumi.output('admin'),
   oidcClientSecret: config.getSecret('oidcClientSecret') ?? pulumi.output('thunderbolt-enterprise-secret'),
   powersyncJwtSecret: config.getSecret('powersyncJwtSecret') ?? pulumi.output('enterprise-powersync-secret'),
+  betterAuthSecret: config.requireSecret('betterAuthSecret'),
 }
 
 // Shared: VPC (both platforms need this)

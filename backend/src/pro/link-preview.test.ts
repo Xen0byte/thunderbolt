@@ -51,7 +51,6 @@ describe('Link Preview Routes', () => {
       posthogHost: 'https://us.i.posthog.com',
       posthogApiKey: '',
       corsOrigins: 'http://localhost:1420',
-      corsOriginRegex: null,
       corsAllowCredentials: true,
       corsAllowMethods: 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
       corsAllowHeaders: 'Content-Type,Authorization',
@@ -67,6 +66,10 @@ describe('Link Preview Routes', () => {
       oidcClientSecret: '',
       oidcIssuer: '',
       betterAuthUrl: 'http://localhost:8000',
+      betterAuthSecret: 'test-secret-at-least-32-chars-long!!',
+      rateLimitEnabled: false,
+      swaggerEnabled: false,
+      trustedProxy: '',
     })
 
     // Create mock fetch

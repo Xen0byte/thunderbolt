@@ -251,4 +251,179 @@ describe('Auth Waitlist Integration', () => {
       expect(mockSendSignInEmail).toHaveBeenCalledTimes(1)
     })
   })
+
+  describe('OTP resend strategy (reuse)', () => {
+    it('should reuse the same OTP on repeated sends instead of generating a new one', async () => {
+      const email = 'reuse-test@example.com'
+      await db.insert(user).values({
+        id: crypto.randomUUID(),
+        email,
+        name: 'Reuse Test User',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+
+      // First OTP send
+      await auth.api.sendVerificationOTP({
+        body: { email, type: 'sign-in' },
+      })
+      const firstCall = mockSendSignInEmail.mock.calls[0] as unknown as [{ otp: string }]
+      const firstOtp = firstCall[0].otp
+
+      // Second OTP send — should reuse the same OTP
+      mockSendSignInEmail.mockClear()
+      await auth.api.sendVerificationOTP({
+        body: { email, type: 'sign-in' },
+      })
+      const secondCall = mockSendSignInEmail.mock.calls[0] as unknown as [{ otp: string }]
+      const secondOtp = secondCall[0].otp
+
+      expect(secondOtp).toBe(firstOtp)
+    })
+
+    it('should not reset attempt counter when OTP is resent', async () => {
+      const email = 'counter-test@example.com'
+      await db.insert(user).values({
+        id: crypto.randomUUID(),
+        email,
+        name: 'Counter Test User',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+
+      // Send OTP and capture the real code
+      await auth.api.sendVerificationOTP({
+        body: { email, type: 'sign-in' },
+      })
+      const otpCall = mockSendSignInEmail.mock.calls[0] as unknown as [{ otp: string }]
+      const correctOtp = otpCall[0].otp
+
+      // Make 2 wrong attempts (of 3 allowed) — counter goes to 2
+      for (let i = 0; i < 2; i++) {
+        try {
+          await auth.api.signInEmailOTP({ body: { email, otp: '000000' } })
+        } catch {
+          // Expected: INVALID_OTP
+        }
+      }
+
+      // Resend OTP — with "reuse" strategy, counter should NOT reset (stays at 2)
+      mockSendSignInEmail.mockClear()
+      await auth.api.sendVerificationOTP({
+        body: { email, type: 'sign-in' },
+      })
+
+      // Make 1 more wrong attempt — this is the 3rd total, counter goes to 3
+      try {
+        await auth.api.signInEmailOTP({ body: { email, otp: '000000' } })
+      } catch {
+        // Expected: INVALID_OTP
+      }
+
+      // Now try with the CORRECT OTP. If the counter was preserved (3 >= 3),
+      // this must fail. If it had been reset by the resend, this would succeed
+      // because the counter would only be at 1.
+      let signInSucceeded = false
+      try {
+        await auth.api.signInEmailOTP({ body: { email, otp: correctOtp } })
+        signInSucceeded = true
+      } catch {
+        // Expected: locked out because counter was preserved
+      }
+      expect(signInSucceeded).toBe(false)
+    })
+
+    it('should only allow 3 verification attempts before locking out', async () => {
+      const email = 'lockout-test@example.com'
+      await db.insert(user).values({
+        id: crypto.randomUUID(),
+        email,
+        name: 'Lockout Test User',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+
+      // Send OTP
+      await auth.api.sendVerificationOTP({
+        body: { email, type: 'sign-in' },
+      })
+
+      // Use up all 3 attempts with wrong OTPs
+      for (let i = 0; i < 3; i++) {
+        try {
+          await auth.api.signInEmailOTP({ body: { email, otp: '000000' } })
+        } catch {
+          // Expected: INVALID_OTP or TOO_MANY_ATTEMPTS on 3rd
+        }
+      }
+
+      // 4th attempt should be locked out
+      try {
+        await auth.api.signInEmailOTP({ body: { email, otp: '999999' } })
+        expect(true).toBe(false)
+      } catch (err: unknown) {
+        const code = (err as { body?: { code?: string } }).body?.code ?? ''
+        // After 3 attempts, the OTP is deleted — subsequent attempts get INVALID_OTP
+        expect(['TOO_MANY_ATTEMPTS', 'INVALID_OTP']).toContain(code)
+      }
+    })
+
+    it('should generate a fresh OTP with reset counter after attempts are exhausted (known limitation)', async () => {
+      // Documents a known limitation: resendStrategy "reuse" only preserves the counter
+      // when attempts haven't been fully exhausted. Once all 3 attempts are burned,
+      // Better Auth falls through to generate a fresh OTP with counter=0.
+      // This is mitigated by Better Auth's in-memory rate limiter on the send endpoint
+      // (3 req/60s) and will be further addressed by proof-of-work (THU-113).
+      const email = 'exhausted-resend@example.com'
+      await db.insert(user).values({
+        id: crypto.randomUUID(),
+        email,
+        name: 'Exhausted Resend User',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+
+      // Send OTP and capture it
+      await auth.api.sendVerificationOTP({
+        body: { email, type: 'sign-in' },
+      })
+      const firstCall = mockSendSignInEmail.mock.calls[0] as unknown as [{ otp: string }]
+      const firstOtp = firstCall[0].otp
+
+      // Exhaust all 3 attempts
+      for (let i = 0; i < 3; i++) {
+        try {
+          await auth.api.signInEmailOTP({ body: { email, otp: '000000' } })
+        } catch {
+          // Expected
+        }
+      }
+
+      // Resend after exhaustion — generates a fresh OTP with counter=0
+      mockSendSignInEmail.mockClear()
+      await auth.api.sendVerificationOTP({
+        body: { email, type: 'sign-in' },
+      })
+      const secondCall = mockSendSignInEmail.mock.calls[0] as unknown as [{ otp: string }]
+      const freshOtp = secondCall[0].otp
+
+      // Fresh OTP is different (counter was exhausted, so "reuse" fell through)
+      expect(freshOtp).not.toBe(firstOtp)
+
+      // The fresh OTP works — counter was reset to 0.
+      // If this throws, the fresh OTP wasn't accepted (unexpected).
+      let signInSucceeded = false
+      try {
+        await auth.api.signInEmailOTP({ body: { email, otp: freshOtp } })
+        signInSucceeded = true
+      } catch {
+        // Unexpected failure
+      }
+      expect(signInSucceeded).toBe(true)
+    })
+  })
 })

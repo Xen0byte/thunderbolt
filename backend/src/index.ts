@@ -3,11 +3,12 @@ import { createBetterAuthPlugin } from '@/auth/elysia-plugin'
 import { createGoogleAuthRoutes } from '@/auth/google'
 import { createMicrosoftAuthRoutes } from '@/auth/microsoft'
 import { createLoggerMiddleware, createStandaloneLogger } from '@/config/logger'
-import { getCorsOrigins, getCorsOriginsList, getSettings } from '@/config/settings'
+import { getCorsOriginsList, getSettings } from '@/config/settings'
 import { runMigrations } from '@/db/client'
 import { createInferenceRoutes } from '@/inference/routes'
 import { createErrorHandlingMiddleware } from '@/middleware/error-handling'
 import { createHttpLoggingMiddleware } from '@/middleware/http-logging'
+import { createInferenceRateLimit, createProRateLimit } from '@/middleware/rate-limit'
 import { createMcpProxyRoutes } from '@/mcp-proxy/routes'
 import { createPostHogRoutes } from '@/posthog/routes'
 import { createProToolsRoutes } from '@/pro/routes'
@@ -37,7 +38,8 @@ export const createApp = async (deps?: AppDeps) => {
     prefix: '/v1',
   })
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (settings.swaggerEnabled) {
+    // Lazy import to avoid loading swagger and its transitive deps in production
     const { swagger } = await import('@elysiajs/swagger')
     app.use(
       swagger({
@@ -59,11 +61,13 @@ export const createApp = async (deps?: AppDeps) => {
   const { plugin: betterAuthPlugin, auth: createdAuth } = createBetterAuthPlugin(database)
   const auth = deps?.auth ?? createdAuth
 
+  const rateLimitSettings = { enabled: settings.rateLimitEnabled }
+
   return (
     configuredApp
       .use(
         cors({
-          origin: getCorsOrigins(settings),
+          origin: getCorsOriginsList(settings),
           credentials: settings.corsAllowCredentials,
           methods: settings.corsAllowMethods,
           allowedHeaders: settings.corsAllowHeaders,
@@ -71,16 +75,16 @@ export const createApp = async (deps?: AppDeps) => {
         }),
       )
       .use(createLoggerMiddleware(settings))
-      .use(createHttpLoggingMiddleware())
+      .use(createHttpLoggingMiddleware(settings.trustedProxy))
       .use(createErrorHandlingMiddleware())
-      // Better Auth handler (mounted at /api/auth/*)
+      // Auth routes (mounted at /api/auth/*)
       .use(betterAuthPlugin)
       // Mount route groups
       .use(createMainRoutes(auth, fetchFn))
       .use(createGoogleAuthRoutes(auth, fetchFn))
       .use(createMicrosoftAuthRoutes(auth, fetchFn))
-      .use(createProToolsRoutes(auth, fetchFn))
-      .use(createInferenceRoutes(auth))
+      .use(createProToolsRoutes(auth, fetchFn, createProRateLimit(database, rateLimitSettings)))
+      .use(createInferenceRoutes(auth, createInferenceRateLimit(database, rateLimitSettings)))
       .use(createPostHogRoutes(fetchFn))
       .use(createMcpProxyRoutes(auth, fetchFn))
       .use(createWaitlistRoutes({ database, auth, emailService: deps?.waitlistEmailService }))
@@ -136,7 +140,7 @@ const startServer = async () => {
           '🦊 Elysia server started',
         )
 
-        if (process.env.NODE_ENV !== 'production') {
+        if (settings.swaggerEnabled) {
           log.info(
             {
               swaggerUrl: `http://localhost:${settings.port}/v1/swagger`,
