@@ -1,5 +1,11 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 
+/** Sign a raw session token with HMAC-SHA256, producing `rawToken.base64Signature`. */
+export const signBearerToken = (rawToken: string, secret: string): string => {
+  const signature = createHmac('sha256', secret).update(rawToken).digest('base64')
+  return `${rawToken}.${signature}`
+}
+
 /**
  * Verify a signed bearer token (format: `rawToken.base64Signature`) and return the raw session token.
  * Returns null if the token is unsigned, malformed, or the signature doesn't match.

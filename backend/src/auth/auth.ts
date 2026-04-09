@@ -10,6 +10,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { bearer, emailOTP } from 'better-auth/plugins'
 import { genericOAuth } from 'better-auth/plugins/generic-oauth'
 import { isAutoApprovedDomain, sendWaitlistJoinedEmail, sendWaitlistNotReadyEmail } from '@/waitlist/utils'
+import { signBearerToken } from './bearer-token'
 import { buildVerifyUrl, getValidatedOrigin, parseTrustedOrigins, sendSignInEmail } from './utils'
 
 /**
@@ -126,7 +127,10 @@ export const createAuth = (database: typeof DbType) => {
         }
 
         return ctx.json({
-          session: newSession.session,
+          session: {
+            ...newSession.session,
+            token: signBearerToken(newSession.session.token, settings.betterAuthSecret),
+          },
           user: sessionUser,
         })
       }),
