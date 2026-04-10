@@ -2,7 +2,7 @@ import { type ContentPart, parseContentParts } from '@/ai/widget-parser'
 import { sourceToCitation } from '@/lib/source-utils'
 import type { CitationMap, CitationSource, DocumentCitationSource } from '@/types/citation'
 import { buildDocumentSideviewId } from '@/types/citation'
-import type { HaystackReferenceMeta } from '@/types'
+import type { DocumentReference } from '@/types'
 import type { SourceMetadata } from '@/types/source'
 import { type TextUIPart } from 'ai'
 import { memo, useMemo } from 'react'
@@ -15,7 +15,7 @@ type TextPartProps = {
   part: TextUIPart
   messageId: string
   sources?: SourceMetadata[]
-  haystackReferences?: HaystackReferenceMeta[]
+  documentReferences?: DocumentReference[]
 }
 
 /**
@@ -87,11 +87,11 @@ export const buildSourceCitationPlaceholders = (
 }
 
 /**
- * Detects `[N]` citation patterns and builds a CitationMap from Haystack references.
+ * Detects `[N]` citation patterns and builds a CitationMap from document references.
  */
 export const buildDocumentCitationPlaceholders = (
   text: string,
-  references: HaystackReferenceMeta[],
+  references: DocumentReference[],
   startKey = 0,
 ): { fullText: string; citations: CitationMap } => {
   const citations: CitationMap = new Map()
@@ -135,9 +135,9 @@ export const buildDocumentCitationPlaceholders = (
   return { fullText, citations }
 }
 
-export const TextPart = memo(({ part, messageId, sources, haystackReferences }: TextPartProps) => {
+export const TextPart = memo(({ part, messageId, sources, documentReferences }: TextPartProps) => {
   const hasNewSources = !!sources && sources.length > 0
-  const hasDocumentRefs = !!haystackReferences && haystackReferences.length > 0
+  const hasDocumentRefs = !!documentReferences && documentReferences.length > 0
 
   // Build citation data upfront so the hook is always called in the same order
   const { processedParts, citations, hasCitations, hasText } = useMemo(() => {
@@ -154,7 +154,7 @@ export const TextPart = memo(({ part, messageId, sources, haystackReferences }: 
 
     // Pick the citation builder based on which source type is active
     const buildPlaceholders = hasDocumentRefs
-      ? (text: string, offset: number) => buildDocumentCitationPlaceholders(text, haystackReferences, offset)
+      ? (text: string, offset: number) => buildDocumentCitationPlaceholders(text, documentReferences, offset)
       : hasNewSources
         ? (text: string, offset: number) => buildSourceCitationPlaceholders(text, sources, offset)
         : null
@@ -188,7 +188,7 @@ export const TextPart = memo(({ part, messageId, sources, haystackReferences }: 
       hasCitations: false,
       hasText: parts.some((p) => p.type === 'text'),
     }
-  }, [part.text, hasNewSources, hasDocumentRefs, sources, haystackReferences])
+  }, [part.text, hasNewSources, hasDocumentRefs, sources, documentReferences])
 
   const dedupedParts = useMemo(() => deduplicateLinkPreviews(processedParts), [processedParts])
 

@@ -1,16 +1,16 @@
-export type HaystackFile = {
+export type DocumentFile = {
   id: string
   name: string
 }
 
-export type HaystackDocumentMeta = {
+export type DocumentMeta = {
   id: string
   content: string
   score: number
-  file: HaystackFile
+  file: DocumentFile
 }
 
-export type HaystackReferenceMeta = {
+export type DocumentReference = {
   position: number
   fileId: string
   fileName: string

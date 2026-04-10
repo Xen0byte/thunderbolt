@@ -25,7 +25,11 @@ export type HaystackSessionResponse = {
 
 import { z } from 'zod'
 
-export type { HaystackDocumentMeta, HaystackFile, HaystackReferenceMeta } from '../../../shared/haystack-types'
+export type {
+  DocumentMeta as HaystackDocumentMeta,
+  DocumentFile as HaystackFile,
+  DocumentReference as HaystackReferenceMeta,
+} from '../../../shared/document-types'
 
 const deepsetFileSchema = z.object({
   id: z.string(),

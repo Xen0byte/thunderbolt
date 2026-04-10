@@ -22,7 +22,7 @@ import type {
   tasksTable,
   triggersTable,
 } from './db/tables'
-import type { HaystackDocumentMeta, HaystackReferenceMeta } from '../shared/haystack-types'
+import type { DocumentMeta, DocumentReference } from '../shared/document-types'
 
 export type InitData = {
   db: AnyDrizzleDatabase
@@ -91,7 +91,7 @@ export type AutomationRun = {
   isAutomationDeleted: boolean
 }
 
-export type { HaystackDocumentMeta, HaystackFile, HaystackReferenceMeta } from '../shared/haystack-types'
+export type { DocumentFile, DocumentMeta, DocumentReference } from '../shared/document-types'
 
 export type UIMessageMetadata = {
   modelId?: string
@@ -100,8 +100,8 @@ export type UIMessageMetadata = {
   reasoningTime?: Record<string, number>
   reasoningStartTimes?: Record<string, number>
   sources?: SourceMetadata[]
-  haystackDocuments?: HaystackDocumentMeta[]
-  haystackReferences?: HaystackReferenceMeta[]
+  documents?: DocumentMeta[]
+  documentReferences?: DocumentReference[]
 }
 
 export type SideviewType = 'message' | 'thread' | 'imap' | 'document'

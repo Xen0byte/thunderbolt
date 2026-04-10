@@ -12,20 +12,20 @@ import 'react-pdf/dist/Page/TextLayer.css'
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
 
-type FetchHaystackFileOptions = {
+type FetchDocumentFileOptions = {
   cloudUrl: string
   fileId: string
   getAuthToken: () => string | null
   httpClient?: KyInstance
 }
 
-/** Fetches a haystack file with auth and returns a blob URL. */
-export const fetchHaystackFile = async ({
+/** Fetches a document file with auth and returns a blob URL. */
+export const fetchDocumentFile = async ({
   cloudUrl,
   fileId,
   getAuthToken: getToken,
   httpClient = ky,
-}: FetchHaystackFileOptions): Promise<string> => {
+}: FetchDocumentFileOptions): Promise<string> => {
   const token = getToken()
 
   const blob = await httpClient
@@ -93,7 +93,7 @@ export const PdfSidebarViewer = ({ fileId, fileName, initialPage }: DocumentSide
     let cancelled = false
     dispatch({ type: 'reset' })
 
-    fetchHaystackFile({ cloudUrl: cloudUrl.value, fileId, getAuthToken })
+    fetchDocumentFile({ cloudUrl: cloudUrl.value, fileId, getAuthToken })
       .then((url) => {
         if (cancelled) {
           URL.revokeObjectURL(url)

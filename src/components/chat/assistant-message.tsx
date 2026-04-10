@@ -7,7 +7,7 @@ import {
 } from '@/lib/assistant-message'
 import { extractTextFromParts } from '@/lib/message-utils'
 import { splitPartType } from '@/lib/utils'
-import type { HaystackReferenceMeta, ThunderboltUIMessage } from '@/types'
+import type { DocumentReference, ThunderboltUIMessage } from '@/types'
 import type { SourceMetadata } from '@/types/source'
 import type { TextUIPart } from 'ai'
 import { memo, useMemo, type ReactNode } from 'react'
@@ -41,7 +41,7 @@ export const mountMessageParts = (
   reasoningTime: Record<string, number>,
   reasoningStartTimes?: Record<string, number>,
   sources?: SourceMetadata[],
-  haystackReferences?: HaystackReferenceMeta[],
+  documentReferences?: DocumentReference[],
 ) => {
   const partElements: ReactNode[] = []
 
@@ -80,7 +80,7 @@ export const mountMessageParts = (
             part={part as TextUIPart}
             messageId={messageId}
             sources={sources}
-            haystackReferences={haystackReferences}
+            documentReferences={documentReferences}
           />,
         )
         break
@@ -118,10 +118,10 @@ export const AssistantMessage = memo(
       [JSON.stringify(message.metadata?.sources)],
     )
 
-    const haystackReferences = useMemo(
-      () => message.metadata?.haystackReferences,
+    const documentReferences = useMemo(
+      () => message.metadata?.documentReferences,
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [JSON.stringify(message.metadata?.haystackReferences)],
+      [JSON.stringify(message.metadata?.documentReferences)],
     )
 
     // Memoize part element creation to prevent recreating React nodes unnecessarily
@@ -134,9 +134,9 @@ export const AssistantMessage = memo(
           reasoningTime,
           reasoningStartTimes,
           sources,
-          haystackReferences,
+          documentReferences,
         ),
-      [groupedParts, isStreaming, message.id, reasoningTime, reasoningStartTimes, sources, haystackReferences],
+      [groupedParts, isStreaming, message.id, reasoningTime, reasoningStartTimes, sources, documentReferences],
     )
 
     const copyText = useMemo(() => extractTextFromParts(message.parts), [message.parts])

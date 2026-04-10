@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'bun:test'
 import { buildDocumentCitationPlaceholders } from './text-part'
-import type { HaystackReferenceMeta } from '@/types'
+import type { DocumentReference } from '@/types'
 import type { DocumentCitationSource } from '@/types/citation'
 
 describe('buildDocumentCitationPlaceholders', () => {
-  const refs: HaystackReferenceMeta[] = [
+  const refs: DocumentReference[] = [
     { position: 1, fileId: 'f1', fileName: 'report.pdf', pageNumber: 3 },
     { position: 2, fileId: 'f2', fileName: 'notes.docx' },
   ]

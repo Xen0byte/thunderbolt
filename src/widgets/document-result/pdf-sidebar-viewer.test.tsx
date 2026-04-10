@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test'
 import ky from 'ky'
-import { fetchHaystackFile } from './pdf-sidebar-viewer'
+import { fetchDocumentFile } from './pdf-sidebar-viewer'
 
 describe('PdfSidebarViewer file type detection', () => {
   const getFileType = (fileName: string): 'pdf' | 'unsupported' => {
@@ -32,7 +32,7 @@ describe('PdfSidebarViewer file type detection', () => {
   })
 })
 
-describe('fetchHaystackFile', () => {
+describe('fetchDocumentFile', () => {
   const cloudUrl = 'https://example.com/v1'
   const fileId = 'abc-123'
 
@@ -65,7 +65,7 @@ describe('fetchHaystackFile', () => {
     let capturedReq: Request | undefined
     const httpClient = createClient(successFetch((req) => (capturedReq = req)))
 
-    await fetchHaystackFile({
+    await fetchDocumentFile({
       cloudUrl,
       fileId,
       getAuthToken: () => 'my-token',
@@ -79,7 +79,7 @@ describe('fetchHaystackFile', () => {
     let capturedReq: Request | undefined
     const httpClient = createClient(successFetch((req) => (capturedReq = req)))
 
-    await fetchHaystackFile({
+    await fetchDocumentFile({
       cloudUrl,
       fileId,
       getAuthToken: () => null,
@@ -93,7 +93,7 @@ describe('fetchHaystackFile', () => {
     let capturedReq: Request | undefined
     const httpClient = createClient(successFetch((req) => (capturedReq = req)))
 
-    await fetchHaystackFile({
+    await fetchDocumentFile({
       cloudUrl,
       fileId,
       getAuthToken: () => null,
@@ -106,7 +106,7 @@ describe('fetchHaystackFile', () => {
   it('returns a blob URL on success', async () => {
     const httpClient = createClient(successFetch())
 
-    const result = await fetchHaystackFile({
+    const result = await fetchDocumentFile({
       cloudUrl,
       fileId,
       getAuthToken: () => 'tok',
@@ -121,7 +121,7 @@ describe('fetchHaystackFile', () => {
     const httpClient = createClient(mockFetch)
 
     expect(
-      fetchHaystackFile({
+      fetchDocumentFile({
         cloudUrl,
         fileId,
         getAuthToken: () => 'tok',
@@ -134,7 +134,7 @@ describe('fetchHaystackFile', () => {
     let capturedReq: Request | undefined
     const httpClient = createClient(successFetch((req) => (capturedReq = req)))
 
-    await fetchHaystackFile({
+    await fetchDocumentFile({
       cloudUrl,
       fileId,
       getAuthToken: () => 'tok',

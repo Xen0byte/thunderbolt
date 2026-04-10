@@ -1,5 +1,5 @@
 import type { SessionNotification } from '@agentclientprotocol/sdk'
-import type { HaystackDocumentMeta, HaystackReferenceMeta, ThunderboltUIMessage, UIMessageMetadata } from '@/types'
+import type { DocumentMeta, DocumentReference, ThunderboltUIMessage, UIMessageMetadata } from '@/types'
 import type { SourceMetadata } from '@/types/source'
 import { v7 as uuidv7 } from 'uuid'
 import { z } from 'zod'
@@ -21,15 +21,15 @@ type OrderedPart =
   | { kind: 'reasoning'; text: string; id: string; startTime: number }
   | { kind: 'tool'; state: ToolCallState }
 
-const haystackReferenceSchema = z.object({
+const documentReferenceSchema = z.object({
   position: z.number(),
   fileId: z.string(),
   fileName: z.string(),
   pageNumber: z.number().optional(),
 })
 
-const haystackMetaSchema = z.object({
-  haystackReferences: z.array(haystackReferenceSchema).optional(),
+const documentMetaSchema = z.object({
+  haystackReferences: z.array(documentReferenceSchema).optional(),
   haystackDocuments: z
     .array(
       z.object({
@@ -44,13 +44,17 @@ const haystackMetaSchema = z.object({
 
 export const parseMeta = (
   meta: unknown,
-): { haystackReferences?: HaystackReferenceMeta[]; haystackDocuments?: HaystackDocumentMeta[] } | null => {
-  const result = haystackMetaSchema.safeParse(meta)
+): { documentReferences?: DocumentReference[]; documents?: DocumentMeta[] } | null => {
+  const result = documentMetaSchema.safeParse(meta)
   if (!result.success) {
     console.warn('[message-accumulator] _meta did not match expected shape:', result.error.flatten())
     return null
   }
-  return result.data
+  const { haystackReferences, haystackDocuments } = result.data
+  return {
+    ...(haystackReferences !== undefined && { documentReferences: haystackReferences }),
+    ...(haystackDocuments !== undefined && { documents: haystackDocuments }),
+  }
 }
 
 /**
@@ -71,8 +75,8 @@ export const createMessageAccumulator = (messageId?: string) => {
   const reasoningTime: Record<string, number> = {}
   let reasoningCounter = 0
 
-  let haystackReferences: HaystackReferenceMeta[] | undefined
-  let haystackDocuments: HaystackDocumentMeta[] | undefined
+  let documentReferences: DocumentReference[] | undefined
+  let documents: DocumentMeta[] | undefined
   let sources: SourceMetadata[] | undefined
 
   const buildMessage = (): ThunderboltUIMessage => {
@@ -125,11 +129,11 @@ export const createMessageAccumulator = (messageId?: string) => {
 
     // Build metadata
     const metadata: UIMessageMetadata = {}
-    if (haystackReferences) {
-      metadata.haystackReferences = haystackReferences
+    if (documentReferences) {
+      metadata.documentReferences = documentReferences
     }
-    if (haystackDocuments) {
-      metadata.haystackDocuments = haystackDocuments
+    if (documents) {
+      metadata.documents = documents
     }
     if (sources && sources.length > 0) {
       metadata.sources = sources
@@ -173,11 +177,11 @@ export const createMessageAccumulator = (messageId?: string) => {
         }
         if (update._meta) {
           const meta = parseMeta(update._meta)
-          if (meta?.haystackReferences) {
-            haystackReferences = meta.haystackReferences
+          if (meta?.documentReferences) {
+            documentReferences = meta.documentReferences
           }
-          if (meta?.haystackDocuments) {
-            haystackDocuments = meta.haystackDocuments
+          if (meta?.documents) {
+            documents = meta.documents
           }
         }
         break
@@ -253,11 +257,11 @@ export const createMessageAccumulator = (messageId?: string) => {
   return {
     handleUpdate,
     buildMessage,
-    setHaystackDocuments(docs: HaystackDocumentMeta[]) {
-      haystackDocuments = docs
+    setDocuments(docs: DocumentMeta[]) {
+      documents = docs
     },
-    setHaystackReferences(refs: HaystackReferenceMeta[]) {
-      haystackReferences = refs
+    setDocumentReferences(refs: DocumentReference[]) {
+      documentReferences = refs
     },
     setSources(s: SourceMetadata[]) {
       sources = s
