@@ -62,11 +62,11 @@ export const sendAcpPrompt = async ({ sessionId, text, metadata, saveMessages }:
 
     if (result._meta) {
       const meta = parseMeta(result._meta)
-      if (meta?.haystackDocuments) {
-        accumulator.setHaystackDocuments(meta.haystackDocuments)
+      if (meta?.documents) {
+        accumulator.setDocuments(meta.documents)
       }
-      if (meta?.haystackReferences) {
-        accumulator.setHaystackReferences(meta.haystackReferences)
+      if (meta?.documentReferences) {
+        accumulator.setDocumentReferences(meta.documentReferences)
       }
 
       const rawSources = (result._meta as Record<string, unknown>)?.sources

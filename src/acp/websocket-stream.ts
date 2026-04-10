@@ -83,15 +83,19 @@ export const connectWithReconnect = ({
 
     // Support both sync and async createWebSocket
     if (result instanceof Promise) {
-      result.then(wireSocket).catch(() => {
-        if (retries >= maxRetries) {
-          onGiveUp()
-          return
+      void (async () => {
+        try {
+          wireSocket(await result)
+        } catch {
+          if (retries >= maxRetries) {
+            onGiveUp()
+            return
+          }
+          const delay = baseDelayMs * Math.pow(2, retries)
+          retries++
+          retryTimeout = setTimeout(attempt, delay)
         }
-        const delay = baseDelayMs * Math.pow(2, retries)
-        retries++
-        retryTimeout = setTimeout(attempt, delay)
-      })
+      })()
     } else {
       wireSocket(result)
     }

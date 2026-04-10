@@ -1,7 +1,7 @@
 import { useDatabase } from '@/contexts'
 import { oauthRetryEvent, getOAuthWidgetKey } from '@/widgets/connect-integration/constants'
 import type { SaveMessagesFunction, ThunderboltUIMessage } from '@/types'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useEffectEvent } from 'react'
 import { useChatStore } from '@/chats/chat-store'
 import { useShallow } from 'zustand/react/shallow'
 import { useIntegrationStatus, type IntegrationStatus } from '@/hooks/use-integration-status'
@@ -139,14 +139,12 @@ export const useHandleIntegrationCompletion = ({
   const db = useDatabase()
   const oauthRetryHandledRef = useRef<Set<string>>(new Set())
 
-  const { sessionId, sessionStatus, messages } = useChatStore(
+  const { sessionId } = useChatStore(
     useShallow((state) => {
       const session = state.sessions.get(state.currentSessionId ?? '')
 
       return {
         sessionId: session?.id,
-        sessionStatus: session?.status,
-        messages: session?.messages,
       }
     }),
   )
@@ -154,24 +152,15 @@ export const useHandleIntegrationCompletion = ({
   const { data: integrationStatus } = useIntegrationStatus()
   const queryClient = useQueryClient()
 
-  // Listen for OAuth completion events and process retries
-  useEffect(() => {
-    const handleOAuthComplete = (event: CustomEvent<{ widgetMessageId: string }>) => {
-      const { widgetMessageId } = event.detail
-      if (!widgetMessageId || !sessionId || !messages) {
+  const processRetryForWidget = useEffectEvent(
+    async (widgetMessageId: string, provider: 'google' | 'microsoft' | null) => {
+      const currentSessionId = useChatStore.getState().currentSessionId
+      const currentSession = currentSessionId ? useChatStore.getState().sessions.get(currentSessionId) : undefined
+
+      if (!widgetMessageId || !currentSessionId || !currentSession) {
         return
       }
 
-      const storedProvider = sessionStorage.getItem(getOAuthWidgetKey(widgetMessageId, 'provider')) as
-        | 'google'
-        | 'microsoft'
-        | null
-
-      // Trigger processing immediately
-      processRetryForWidget(widgetMessageId, storedProvider)
-    }
-
-    const processRetryForWidget = async (widgetMessageId: string, provider: 'google' | 'microsoft' | null) => {
       if (oauthRetryHandledRef.current.has(widgetMessageId)) {
         return
       }
@@ -185,14 +174,14 @@ export const useHandleIntegrationCompletion = ({
       }
 
       // Find widget message in chat history (with retry for race conditions)
-      const widgetMessageIndex = await waitForMessageInSession(sessionId!, widgetMessageId)
+      const widgetMessageIndex = await waitForMessageInSession(currentSessionId, widgetMessageId)
 
       if (widgetMessageIndex < 0) {
         console.warn('Widget message not found:', widgetMessageId)
         return
       }
 
-      const currentMessages = useChatStore.getState().sessions.get(sessionId!)?.messages ?? []
+      const currentMessages = useChatStore.getState().sessions.get(currentSessionId)?.messages ?? []
       const originalUserText = findOriginalUserText(currentMessages, widgetMessageIndex)
       if (!originalUserText) {
         console.warn('Original user text not found for widget message:', widgetMessageId)
@@ -206,7 +195,7 @@ export const useHandleIntegrationCompletion = ({
 
       try {
         await saveMessages({
-          id: sessionId!,
+          id: currentSessionId,
           messages: [retryMessage],
         })
 
@@ -219,10 +208,10 @@ export const useHandleIntegrationCompletion = ({
           console.warn('Failed to mark widget as hidden:', err)
         }
 
-        await waitForSessionReady(sessionId!)
+        await waitForSessionReady(currentSessionId)
 
         await sendPrompt({
-          sessionId: sessionId!,
+          sessionId: currentSessionId,
           text: retryText,
           metadata: { oauthRetry: true },
           saveMessages,
@@ -231,9 +220,28 @@ export const useHandleIntegrationCompletion = ({
         console.error('Failed to process OAuth retry:', err)
         oauthRetryHandledRef.current.delete(widgetMessageId)
       }
+    },
+  )
+
+  // Listen for OAuth completion events and process retries.
+  // Dependency array is [sessionId] only — processRetryForWidget is a stable
+  // useEffectEvent that reads fresh state via useChatStore.getState() on each call.
+  useEffect(() => {
+    const handleOAuthComplete = (event: CustomEvent<{ widgetMessageId: string }>) => {
+      const { widgetMessageId } = event.detail
+      if (!widgetMessageId) {
+        return
+      }
+
+      const storedProvider = sessionStorage.getItem(getOAuthWidgetKey(widgetMessageId, 'provider')) as
+        | 'google'
+        | 'microsoft'
+        | null
+
+      void processRetryForWidget(widgetMessageId, storedProvider)
     }
 
     window.addEventListener(oauthRetryEvent, handleOAuthComplete as unknown as (event: Event) => void)
     return () => window.removeEventListener(oauthRetryEvent, handleOAuthComplete as unknown as (event: Event) => void)
-  }, [sessionId, sessionStatus, messages, integrationStatus, queryClient, saveMessages, sendPrompt])
+  }, [sessionId])
 }

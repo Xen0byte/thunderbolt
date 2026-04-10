@@ -74,6 +74,7 @@ describe('Main Routes', () => {
       haystackPipelineId: '',
       haystackPipelines: '',
       enabledAgents: '',
+      allowCustomAgents: true,
     } satisfies Settings)
   })
 

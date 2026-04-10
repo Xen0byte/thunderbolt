@@ -68,6 +68,8 @@ export const createHaystackWebSocketHandler = (pipelineConfig: HaystackPipelineC
 
     connections.set(ws.id, {
       writer,
+      // Safe to call twice: writer.close() and reader.cancel() suppress errors on
+      // already-closed streams, and dispose() is idempotent.
       cleanup: () => {
         closed = true
         dispose()

@@ -185,7 +185,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     const db = getDb()
     await updateSettings(db, { selected_model: modelId ?? '' })
 
-    trackEvent('model_select', { model: modelId })
+    if (modelId) {
+      trackEvent('model_select', { model: modelId })
+    }
   },
 
   updateSession: (id, session) => {

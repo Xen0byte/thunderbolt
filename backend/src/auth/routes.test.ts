@@ -63,6 +63,7 @@ describe('Authentication Routes', () => {
       haystackPipelineId: '',
       haystackPipelines: '',
       enabledAgents: '',
+      allowCustomAgents: true,
     })
 
     // Create mock fetch

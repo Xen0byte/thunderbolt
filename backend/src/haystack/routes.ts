@@ -74,7 +74,6 @@ export const createHaystackRoutes = (auth: Auth, fetchFn: typeof fetch = globalT
 
     router.ws(`/ws/${pipeline.slug}`, {
       query: t.Object({ ticket: t.Optional(t.String()) }),
-      body: t.String(),
       open: (ws) => {
         const ticketId = ws.data.query?.ticket
         if (!ticketId) {
@@ -82,8 +81,8 @@ export const createHaystackRoutes = (auth: Auth, fetchFn: typeof fetch = globalT
           ws.close(4001, 'Unauthorized')
           return
         }
-        const userId = consumeWsTicket(ticketId)
-        if (!userId) {
+        const ticket = consumeWsTicket(ticketId)
+        if (!ticket) {
           console.warn(`[haystack] WebSocket rejected — invalid/expired ticket for ${pipeline.slug}`)
           ws.close(4001, 'Unauthorized')
           return
