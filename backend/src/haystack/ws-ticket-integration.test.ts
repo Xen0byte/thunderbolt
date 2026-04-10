@@ -80,7 +80,7 @@ describe('WebSocket ticket auth — integration', () => {
       const ticket = createWsTicket('user-456')
 
       const first = consumeWsTicket(ticket)
-      expect(first).toBe('user-456')
+      expect(first?.userId).toBe('user-456')
 
       const second = consumeWsTicket(ticket)
       expect(second).toBeNull()

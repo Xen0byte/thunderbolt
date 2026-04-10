@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'bun:test'
+import { describe, expect, it } from 'bun:test'
 import { createWsTicket, consumeWsTicket, validateWsTicketFromUrl } from './ws-ticket'
 
 describe('ws-ticket', () => {
@@ -18,8 +18,8 @@ describe('ws-ticket', () => {
   describe('consumeWsTicket', () => {
     it('returns userId for valid ticket', () => {
       const ticket = createWsTicket('user-456')
-      const userId = consumeWsTicket(ticket)
-      expect(userId).toBe('user-456')
+      const result = consumeWsTicket(ticket)
+      expect(result?.userId).toBe('user-456')
     })
 
     it('returns null for unknown ticket', () => {
@@ -28,16 +28,29 @@ describe('ws-ticket', () => {
 
     it('returns null on second use (one-time)', () => {
       const ticket = createWsTicket('user-789')
-      expect(consumeWsTicket(ticket)).toBe('user-789')
+      expect(consumeWsTicket(ticket)?.userId).toBe('user-789')
       expect(consumeWsTicket(ticket)).toBeNull()
+    })
+
+    it('includes payload when provided', () => {
+      const ticket = createWsTicket('user-abc', { url: 'http://example.com', authMethod: '{"apiKey":"sk-test"}' })
+      const result = consumeWsTicket(ticket)
+      expect(result?.userId).toBe('user-abc')
+      expect(result?.payload?.url).toBe('http://example.com')
+      expect(result?.payload?.authMethod).toBe('{"apiKey":"sk-test"}')
+    })
+
+    it('omits payload when not provided', () => {
+      const ticket = createWsTicket('user-def')
+      const result = consumeWsTicket(ticket)
+      expect(result?.payload).toBeUndefined()
     })
   })
 
   describe('validateWsTicketFromUrl', () => {
     it('extracts and validates ticket from URL query param', () => {
       const ticket = createWsTicket('user-abc')
-      const userId = validateWsTicketFromUrl(`/ws/chat?ticket=${ticket}`)
-      expect(userId).toBe('user-abc')
+      expect(validateWsTicketFromUrl(`/ws/chat?ticket=${ticket}`)).toBe('user-abc')
     })
 
     it('returns null when no ticket param', () => {

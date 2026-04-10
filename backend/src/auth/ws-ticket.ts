@@ -3,6 +3,7 @@ import type { Auth } from './auth'
 type WsTicket = {
   userId: string
   expiresAt: number
+  payload?: Record<string, unknown>
 }
 
 const TICKET_TTL_MS = 30_000 // 30 seconds
@@ -30,8 +31,7 @@ const evictExpired = () => {
  * Creates a short-lived, one-time-use ticket for WebSocket authentication.
  * The ticket is consumed on first use and expires after TICKET_TTL_MS.
  */
-export const createWsTicket = (userId: string): string => {
-  // Evict expired tickets periodically to prevent unbounded growth
+export const createWsTicket = (userId: string, payload?: Record<string, unknown>): string => {
   if (tickets.size > MAX_TICKETS / 2) {
     evictExpired()
   }
@@ -40,6 +40,7 @@ export const createWsTicket = (userId: string): string => {
   tickets.set(ticketId, {
     userId,
     expiresAt: Date.now() + TICKET_TTL_MS,
+    ...(payload ? { payload } : {}),
   })
   return ticketId
 }
@@ -48,20 +49,19 @@ export const createWsTicket = (userId: string): string => {
  * Validates and consumes a WebSocket ticket. Returns the userId if valid,
  * null if the ticket is invalid, expired, or already consumed.
  */
-export const consumeWsTicket = (ticketId: string): string | null => {
+export const consumeWsTicket = (ticketId: string): { userId: string; payload?: Record<string, unknown> } | null => {
   const ticket = tickets.get(ticketId)
   if (!ticket) {
     return null
   }
 
-  // One-time use — delete immediately
   tickets.delete(ticketId)
 
   if (Date.now() > ticket.expiresAt) {
     return null
   }
 
-  return ticket.userId
+  return { userId: ticket.userId, payload: ticket.payload }
 }
 
 /**
@@ -76,7 +76,7 @@ export const validateWsTicketFromUrl = (url: string): string | null => {
     if (!ticketId) {
       return null
     }
-    return consumeWsTicket(ticketId)
+    return consumeWsTicket(ticketId)?.userId ?? null
   } catch {
     return null
   }

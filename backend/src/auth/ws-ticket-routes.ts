@@ -25,8 +25,20 @@ export const createWsTicketRoutes = (auth: Auth) => {
         return { error: 'Unauthorized' }
       }
     })
-    .post('/', ({ user }) => {
-      const ticket = createWsTicket(user!.id)
+    .post('/', async ({ user, request }) => {
+      const body = (await request.json().catch(() => ({}))) as { payload?: { url?: string; authMethod?: string } }
+      const raw = body.payload
+
+      // Validate and cap payload to prevent memory abuse
+      let payload: Record<string, unknown> | undefined
+      if (raw && typeof raw.url === 'string' && /^(wss?|https?):\/\//.test(raw.url) && raw.url.length <= 2048) {
+        payload = { url: raw.url }
+        if (typeof raw.authMethod === 'string' && raw.authMethod.length <= 4096) {
+          payload.authMethod = raw.authMethod
+        }
+      }
+
+      const ticket = createWsTicket(user!.id, payload)
       return { ticket }
     })
 
