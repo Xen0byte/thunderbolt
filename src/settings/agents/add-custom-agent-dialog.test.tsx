@@ -69,6 +69,7 @@ describe('AddCustomAgentDialogContent', () => {
       command: '/usr/bin/my-agent',
       args: ['--acp', '--verbose'],
       description: 'Test agent',
+      apiKey: undefined,
     })
   })
 
@@ -87,6 +88,7 @@ describe('AddCustomAgentDialogContent', () => {
       command: '/usr/bin/my-agent',
       args: undefined,
       description: undefined,
+      apiKey: undefined,
     })
   })
 
@@ -103,6 +105,7 @@ describe('AddCustomAgentDialogContent', () => {
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: '  My Agent  ' } })
     fireEvent.change(screen.getByLabelText('Command'), { target: { value: '  /usr/bin/my-agent  ' } })
+    fireEvent.change(screen.getByLabelText('API Key (optional)'), { target: { value: '  sk-test  ' } })
 
     fireEvent.click(screen.getByText('Add Agent'))
 
@@ -112,6 +115,7 @@ describe('AddCustomAgentDialogContent', () => {
       command: '/usr/bin/my-agent',
       args: undefined,
       description: undefined,
+      apiKey: 'sk-test',
     })
   })
 
@@ -133,6 +137,69 @@ describe('AddCustomAgentDialogContent', () => {
       renderDialog({})
       expect(screen.getByLabelText('Command')).toBeDefined()
       expect(screen.queryByLabelText('WebSocket URL')).toBeNull()
+    })
+  })
+
+  it('renders API Key field', () => {
+    renderDialog({})
+    expect(screen.getByLabelText('API Key (optional)')).toBeDefined()
+  })
+
+  it('includes apiKey in local agent params when provided', () => {
+    const onAdd = mock(() => {})
+    renderDialog({ onAdd })
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'My Agent' } })
+    fireEvent.change(screen.getByLabelText('Command'), { target: { value: '/usr/bin/my-agent' } })
+    fireEvent.change(screen.getByLabelText('API Key (optional)'), { target: { value: 'sk-test-key-123' } })
+
+    fireEvent.click(screen.getByText('Add Agent'))
+
+    expect(onAdd).toHaveBeenCalledWith({
+      type: 'local',
+      name: 'My Agent',
+      command: '/usr/bin/my-agent',
+      args: undefined,
+      description: undefined,
+      apiKey: 'sk-test-key-123',
+    })
+  })
+
+  it('includes apiKey in remote agent params when provided', () => {
+    const onAdd = mock(() => {})
+    renderDialog({ onAdd, remoteOnly: true })
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Remote Agent' } })
+    fireEvent.change(screen.getByLabelText('WebSocket URL'), { target: { value: 'wss://example.com/agent' } })
+    fireEvent.change(screen.getByLabelText('API Key (optional)'), { target: { value: 'sk-remote-key' } })
+
+    fireEvent.click(screen.getByText('Add Agent'))
+
+    expect(onAdd).toHaveBeenCalledWith({
+      type: 'remote',
+      name: 'Remote Agent',
+      url: 'wss://example.com/agent',
+      description: undefined,
+      apiKey: 'sk-remote-key',
+    })
+  })
+
+  it('omits apiKey when empty', () => {
+    const onAdd = mock(() => {})
+    renderDialog({ onAdd })
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'My Agent' } })
+    fireEvent.change(screen.getByLabelText('Command'), { target: { value: '/usr/bin/my-agent' } })
+
+    fireEvent.click(screen.getByText('Add Agent'))
+
+    expect(onAdd).toHaveBeenCalledWith({
+      type: 'local',
+      name: 'My Agent',
+      command: '/usr/bin/my-agent',
+      args: undefined,
+      description: undefined,
+      apiKey: undefined,
     })
   })
 })

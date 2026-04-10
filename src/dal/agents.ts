@@ -165,15 +165,16 @@ export const installRegistryAgent = async (
 }
 
 /**
- * Hard-deletes a registry agent from the database.
- * Returns true if the agent was deleted, false if it didn't exist.
+ * Soft-deletes a registry agent from the database.
+ * Returns true if the agent was found and marked deleted, false if it didn't exist.
+ * installRegistryAgent handles the soft-deleted case on reinstall by clearing deletedAt.
  */
 export const uninstallRegistryAgent = async (db: AnyDrizzleDatabase, id: string): Promise<boolean> => {
   const existing = await db.select().from(agentsTable).where(eq(agentsTable.id, id)).get()
   if (!existing) {
     return false
   }
-  await db.delete(agentsTable).where(eq(agentsTable.id, id))
+  await db.update(agentsTable).set({ deletedAt: new Date().toISOString() }).where(eq(agentsTable.id, id))
   return true
 }
 
@@ -210,6 +211,7 @@ type AddCustomAgentParams = {
   command: string
   args?: string[]
   description?: string
+  apiKey?: string
 }
 
 /**
@@ -229,6 +231,7 @@ export const addCustomAgent = async (db: AnyDrizzleDatabase, params: AddCustomAg
     enabled: 1,
     distributionType: 'custom',
     description: params.description ?? null,
+    authMethod: params.apiKey ? JSON.stringify({ apiKey: params.apiKey }) : null,
   })
 
   const result = await db.select().from(agentsTable).where(eq(agentsTable.id, id)).get()
@@ -239,6 +242,7 @@ type AddRemoteAgentParams = {
   name: string
   url: string
   description?: string
+  apiKey?: string
 }
 
 /**
@@ -257,6 +261,7 @@ export const addRemoteAgent = async (db: AnyDrizzleDatabase, params: AddRemoteAg
     enabled: 1,
     distributionType: 'remote',
     description: params.description ?? null,
+    authMethod: params.apiKey ? JSON.stringify({ apiKey: params.apiKey }) : null,
   })
 
   const result = await db.select().from(agentsTable).where(eq(agentsTable.id, id)).get()

@@ -11,8 +11,8 @@ import {
 import { useState } from 'react'
 
 export type AddAgentParams =
-  | { type: 'local'; name: string; command: string; args?: string[]; description?: string }
-  | { type: 'remote'; name: string; url: string; description?: string }
+  | { type: 'local'; name: string; command: string; args?: string[]; description?: string; apiKey?: string }
+  | { type: 'remote'; name: string; url: string; description?: string; apiKey?: string }
 
 type AddCustomAgentDialogProps = {
   onAdd: (params: AddAgentParams) => void
@@ -28,6 +28,7 @@ export const AddCustomAgentDialogContent = ({ onAdd, onClose, remoteOnly }: AddC
   const [args, setArgs] = useState('')
   const [url, setUrl] = useState('')
   const [description, setDescription] = useState('')
+  const [apiKey, setApiKey] = useState('')
 
   const canSubmit = agentType === 'local' ? name.trim() && command.trim() : name.trim() && url.trim()
 
@@ -43,6 +44,7 @@ export const AddCustomAgentDialogContent = ({ onAdd, onClose, remoteOnly }: AddC
         command: command.trim(),
         args: args.trim() ? args.trim().split(/\s+/) : undefined,
         description: description.trim() || undefined,
+        apiKey: apiKey.trim() || undefined,
       })
     } else {
       onAdd({
@@ -50,6 +52,7 @@ export const AddCustomAgentDialogContent = ({ onAdd, onClose, remoteOnly }: AddC
         name: name.trim(),
         url: url.trim(),
         description: description.trim() || undefined,
+        apiKey: apiKey.trim() || undefined,
       })
     }
   }
@@ -124,6 +127,17 @@ export const AddCustomAgentDialogContent = ({ onAdd, onClose, remoteOnly }: AddC
             placeholder="A brief description of this agent"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+          />
+        </div>
+
+        <div className="grid gap-2">
+          <Label htmlFor="agent-api-key">API Key (optional)</Label>
+          <Input
+            id="agent-api-key"
+            type="password"
+            placeholder="sk-..."
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
           />
         </div>
       </div>

@@ -44,7 +44,7 @@ export const mergeRegistryWithInstalled = (
       builtInAgents.push(agent)
     } else if (agent.registryId) {
       installedByRegistryId.set(agent.registryId, agent)
-    } else if ((agent as any).distributionType === 'custom') {
+    } else if (agent.isSystem === 0 && !agent.registryId) {
       customAgents.push(agent)
     }
     installedById.set(agent.id, agent)
@@ -83,7 +83,7 @@ export const mergeRegistryWithInstalled = (
       registryId: agent.id,
       agentId: agent.id,
       name: agent.name ?? 'Thunderbolt',
-      description: (agent as any).description ?? 'Built-in AI assistant',
+      description: agent.description ?? 'Built-in AI assistant',
       version: '',
       installedVersion: null,
       updateAvailable: false,
@@ -100,22 +100,23 @@ export const mergeRegistryWithInstalled = (
     })
   }
 
-  // Append custom agents
+  // Append user-added agents (custom local + custom remote)
   for (const agent of customAgents) {
+    const isRemote = agent.type === 'remote'
     merged.push({
       registryId: agent.id,
       agentId: agent.id,
       name: agent.name ?? 'Unknown',
-      description: (agent as any).description ?? '',
+      description: agent.description ?? '',
       version: '',
       installedVersion: null,
       updateAvailable: false,
       isInstalled: true,
       isCustom: true,
-      isRemote: false,
+      isRemote,
       isBuiltIn: false,
       enabled: agent.enabled === 1,
-      distributionType: 'custom',
+      distributionType: agent.distributionType ?? (isRemote ? 'remote' : 'custom'),
       icon: agent.icon ?? null,
       authors: [],
       license: '',
