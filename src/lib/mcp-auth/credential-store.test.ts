@@ -1,15 +1,14 @@
 import { getDb } from '@/db/database'
 import { mcpCredentialsTable, mcpServersTable } from '@/db/tables'
-import { afterAll, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
 import { v7 as uuidv7 } from 'uuid'
 import { resetTestDatabase, setupTestDatabase, teardownTestDatabase } from '@/dal/test-utils'
 import { createCredentialStore, resetKeyCache } from './credential-store'
 import type { McpCredential } from '@/types/mcp'
-
-// Mock @/lib/auth-token so getDeviceId returns a stable test value
-mock.module('@/lib/auth-token', () => ({
-  getDeviceId: () => 'test-device-id',
-}))
+// No mock for @/lib/auth-token — the real getDeviceId reads from localStorage, which is
+// safe to use in tests. Mocking it to a literal string caused worker-level contamination:
+// sibling test files (e.g. pending-device-modal) set localStorage and rely on getDeviceId
+// returning that value, but a literal mock ignores localStorage entirely.
 
 beforeAll(async () => {
   await setupTestDatabase()
