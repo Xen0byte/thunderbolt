@@ -74,12 +74,12 @@ async function uploadToPlayStore() {
             releases: [
               {
                 versionCodes: [uploadResponse.data.versionCode],
-                status: 'draft',
+                status: track === 'internal' ? 'completed' : 'draft',
               },
             ],
           },
         })
-        console.log(`✅ Track set to ${track}:`, trackResponse.data)
+        console.log('✅ Track set to %s:', track, trackResponse.data)
       }
 
       // Commit the edit

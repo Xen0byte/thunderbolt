@@ -1,4 +1,6 @@
-import { getSettings } from '@/config/settings'
+import type { Auth } from '@/auth/elysia-plugin'
+import { createAuthMacro } from '@/auth/elysia-plugin'
+import { getSettings, isOAuthRedirectUriAllowed } from '@/config/settings'
 import { safeErrorHandler } from '@/middleware/error-handling'
 import { Elysia, t } from 'elysia'
 import { codeRequestSchema, refreshRequestSchema, type OAuthTokenResponse } from './types'
@@ -8,19 +10,25 @@ const MICROSOFT_TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.
 const SCOPES = 'https://graph.microsoft.com/mail.read User.Read offline_access'
 
 /**
- * Create Microsoft OAuth router
+ * Microsoft OAuth confidential client proxy — keeps the client secret server-side
+ * so the Tauri frontend doesn't need to embed it.
  */
-export const createMicrosoftAuthRoutes = (fetchFn: typeof fetch = globalThis.fetch) => {
+export const createMicrosoftAuthRoutes = (auth: Auth, fetchFn: typeof fetch = globalThis.fetch) => {
   return new Elysia({ prefix: '/auth/microsoft' })
     .onError(safeErrorHandler)
-    .get('/config', async () => {
-      const settings = getSettings()
+    .use(createAuthMacro(auth))
+    .get(
+      '/config',
+      async () => {
+        const settings = getSettings()
 
-      return {
-        client_id: settings.microsoftClientId,
-        configured: Boolean(settings.microsoftClientId && settings.microsoftClientSecret),
-      }
-    })
+        return {
+          client_id: settings.microsoftClientId,
+          configured: Boolean(settings.microsoftClientId && settings.microsoftClientSecret),
+        }
+      },
+      { auth: true },
+    )
 
     .post(
       '/exchange',
@@ -35,6 +43,11 @@ export const createMicrosoftAuthRoutes = (fetchFn: typeof fetch = globalThis.fet
         }
 
         const validatedBody = codeRequestSchema.parse(body)
+
+        if (!isOAuthRedirectUriAllowed(validatedBody.redirect_uri, settings)) {
+          set.status = 400
+          return { error: 'Invalid redirect_uri' }
+        }
 
         const data = new URLSearchParams({
           client_id: settings.microsoftClientId,
@@ -87,6 +100,7 @@ export const createMicrosoftAuthRoutes = (fetchFn: typeof fetch = globalThis.fet
         }
       },
       {
+        auth: true,
         body: t.Object({
           code: t.String(),
           code_verifier: t.String(),
@@ -158,6 +172,7 @@ export const createMicrosoftAuthRoutes = (fetchFn: typeof fetch = globalThis.fet
         }
       },
       {
+        auth: true,
         body: t.Object({
           refresh_token: t.String(),
         }),

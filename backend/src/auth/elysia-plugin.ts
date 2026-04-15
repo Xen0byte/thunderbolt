@@ -1,33 +1,42 @@
 import type { db as DbType } from '@/db/client'
-import { Elysia } from 'elysia'
+import { Elysia, type AnyElysia } from 'elysia'
 import { type Auth, createAuth } from './auth'
 
 /**
- * Create a Better Auth plugin for Elysia with the provided database
- * This allows tests to inject their own database instance
+ * Reusable auth macro plugin. Use with `{ auth: true }` on routes
+ * to require authentication and get typed `user`/`session` on context.
  */
-export const createBetterAuthPlugin = (database: typeof DbType) => {
+export const createAuthMacro = (auth: Auth) =>
+  new Elysia({ name: 'auth-macro' }).macro({
+    auth: {
+      async resolve({ status, request: { headers } }) {
+        const session = await auth.api.getSession({ headers })
+
+        if (!session) {
+          return status(401)
+        }
+
+        return {
+          user: session.user,
+          session: session.session,
+        }
+      },
+    },
+  })
+
+/** Create a Better Auth plugin for Elysia with the provided database. */
+export const createBetterAuthPlugin = (database: typeof DbType, ipRateLimit?: AnyElysia) => {
   const auth = createAuth(database)
 
-  return {
-    plugin: new Elysia({ name: 'better-auth' }).mount(auth.handler).macro({
-      auth: {
-        async resolve({ status, request: { headers } }) {
-          const session = await auth.api.getSession({ headers })
-
-          if (!session) {
-            return status(401)
-          }
-
-          return {
-            user: session.user,
-            session: session.session,
-          }
-        },
-      },
-    }),
-    auth,
+  const plugin = new Elysia({ name: 'better-auth' })
+  if (ipRateLimit) {
+    plugin.use(ipRateLimit)
   }
+  // Use .all() instead of .mount() — Elysia's mount() short-circuits the
+  // request pipeline before onBeforeHandle, silently bypassing rate limiting.
+  plugin.all('/*', ({ request }) => auth.handler(request), { parse: 'none' })
+
+  return { plugin, auth }
 }
 
 export type { Auth }

@@ -1,11 +1,13 @@
-import { getCorsOrigins, getSettings } from '@/config/settings'
+import { getCorsOriginsList, getSettings } from '@/config/settings'
 import { safeErrorHandler } from '@/middleware/error-handling'
 import { buildQueryString, defaultRequestDenylist, extractResponseHeaders, filterHeaders } from '@/utils/request'
 import cors from '@elysiajs/cors'
 import { Elysia } from 'elysia'
 
 /**
- * PostHog analytics proxy routes
+ * PostHog analytics proxy routes — intentionally public (no auth).
+ * Events are anonymous client-side analytics; the proxy target is fixed to posthogHost.
+ * PostHog's API rejects events without a valid project API key.
  */
 export const createPostHogRoutes = (fetchFn: typeof fetch = globalThis.fetch) => {
   const settings = getSettings()
@@ -16,14 +18,14 @@ export const createPostHogRoutes = (fetchFn: typeof fetch = globalThis.fetch) =>
     .onError(safeErrorHandler)
     .use(
       cors({
-        origin: getCorsOrigins(settings),
+        origin: getCorsOriginsList(settings),
         allowedHeaders: settings.corsAllowHeaders,
         exposeHeaders: settings.corsExposeHeaders,
       }),
     )
     .get('/config', async () => {
       return {
-        posthog_api_key: settings.posthogApiKey,
+        public_posthog_api_key: settings.posthogApiKey,
       }
     })
     .all(
@@ -44,6 +46,11 @@ export const createPostHogRoutes = (fetchFn: typeof fetch = globalThis.fetch) =>
         })
 
         const responseHeaders = extractResponseHeaders(response.headers)
+
+        // Prevent XSS: proxied content must never execute scripts in our origin
+        responseHeaders.set('content-security-policy', 'sandbox')
+        responseHeaders.set('content-disposition', 'attachment')
+        responseHeaders.set('x-content-type-options', 'nosniff')
 
         responseHeaders.set('cross-origin-resource-policy', 'cross-origin')
 

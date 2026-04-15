@@ -10,6 +10,7 @@ import {
 } from '@/ai/step-logic'
 import { getModel, getModelProfile, getSettings } from '@/dal'
 import { getDb } from '@/db/database'
+import { getAuthToken } from '@/lib/auth-token'
 import { fetch } from '@/lib/fetch'
 import { createToolset, getAvailableTools } from '@/lib/tools'
 import type { Model, SaveMessagesFunction, ThunderboltUIMessage } from '@/types'
@@ -17,7 +18,7 @@ import type { SourceMetadata } from '@/types/source'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import ky, { type KyInstance } from 'ky'
+import type { HttpClient } from '@/lib/http'
 import { v7 as uuidv7 } from 'uuid'
 
 // Currently @openrouter/ai-sdk-provider is NOT compatible with Vercel AI SDK v5. If you enable this, you will get the following error:
@@ -55,7 +56,7 @@ type AiFetchStreamingResponseOptions = {
   modeSystemPrompt?: string
   modeName?: string
   mcpClients?: MCPClient[]
-  httpClient?: KyInstance
+  httpClient: HttpClient
 }
 
 export const createModel = async (modelConfig: Model) => {
@@ -63,13 +64,14 @@ export const createModel = async (modelConfig: Model) => {
     case 'thunderbolt': {
       const db = getDb()
       const { cloudUrl } = await getSettings(db, { cloud_url: 'http://localhost:8000/v1' })
+      const token = getAuthToken() || 'thunderbolt'
       // GPT OSS (vendor: 'openai') uses createOpenAI with .chat() to force Chat Completions API
       // (AI SDK 5 defaults createOpenAI to Responses API which our backend doesn't support)
       if (modelConfig.vendor === 'openai') {
-        const provider = createOpenAI({ baseURL: cloudUrl, apiKey: 'thunderbolt', fetch })
+        const provider = createOpenAI({ baseURL: cloudUrl, apiKey: token, fetch })
         return provider.chat(modelConfig.model)
       }
-      const provider = createOpenAICompatible({ name: 'thunderbolt', baseURL: cloudUrl, fetch })
+      const provider = createOpenAICompatible({ name: 'thunderbolt', baseURL: cloudUrl, apiKey: token, fetch })
       return provider(modelConfig.model)
     }
     case 'anthropic': {
@@ -77,6 +79,10 @@ export const createModel = async (modelConfig: Model) => {
         apiKey: modelConfig.apiKey || '',
         fetch,
         headers: {
+          // When a user adds their own Anthropic API key, calls go directly from the
+          // browser to Anthropic's API (not through our backend). Anthropic blocks
+          // browser-origin requests by default to prevent accidental key exposure.
+          // This header opts in, acknowledging the risk.
           'anthropic-dangerous-direct-browser-access': 'true',
         },
       })
@@ -173,9 +179,7 @@ export const aiFetchStreamingResponse = async ({
 
   let toolset: Record<string, Tool> = {}
   if (supportsTools) {
-    // Use provided httpClient for tests, otherwise use plain ky for external APIs
-    const toolsHttpClient = httpClient || ky
-    const availableTools = await getAvailableTools(toolsHttpClient, sourceCollector)
+    const availableTools = await getAvailableTools(httpClient, sourceCollector)
     toolset = { ...createToolset(availableTools) }
 
     for (const mcpClient of mcpClients || []) {
@@ -338,7 +342,7 @@ export const aiFetchStreamingResponse = async ({
           }
 
           // For other errors, skip the tool call
-          console.warn(`Tool call error for "${toolCall.toolName}":`, error)
+          console.warn('Tool call error for "%s":', toolCall.toolName, error)
           return null
         },
       })
@@ -426,8 +430,10 @@ export const aiFetchStreamingResponse = async ({
     return createUIMessageStreamResponse({ stream })
   } catch (error) {
     console.error('aiFetchStreamingResponse error', error)
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      status: 500,
+    const status =
+      (error as { status?: number }).status ?? (error as { response?: { status?: number } }).response?.status
+    return new Response(JSON.stringify({ error: (error as Error).message, status }), {
+      status: status ?? 500,
       headers: { 'Content-Type': 'application/json' },
     })
   }

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, it, mock } from 'bun:test'
 import { webPlatformMock } from '@/test-utils/platform-mock'
 import { tauriCoreMock } from '@/test-utils/tauri-mock'
 
@@ -14,53 +14,16 @@ import { act, renderHook } from '@testing-library/react'
 import { useAppInitialization } from './use-app-initialization'
 
 const mockPostHogConfig = {
-  posthog_api_key: null, // Disable PostHog in tests
+  public_posthog_api_key: null, // Disable PostHog in tests
 }
 
 describe('useAppInitialization', () => {
-  let originalLocation: Location | undefined
-
   beforeAll(async () => {
     await setupTestDatabase()
-
-    if (typeof window !== 'undefined' && window.location) {
-      originalLocation = window.location
-    }
   })
 
   afterAll(async () => {
     await teardownTestDatabase()
-  })
-
-  beforeEach(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        Object.defineProperty(window, 'location', {
-          value: {
-            ...window.location,
-            href: 'https://app.test/?sideview=message:123',
-          },
-          writable: true,
-          configurable: true,
-        })
-      } catch {
-        // If we can't modify location, tests will use default
-      }
-    }
-  })
-
-  afterEach(() => {
-    if (originalLocation && typeof window !== 'undefined') {
-      try {
-        Object.defineProperty(window, 'location', {
-          value: originalLocation,
-          writable: true,
-          configurable: true,
-        })
-      } catch {
-        // Ignore restore errors
-      }
-    }
   })
 
   it('provides correct hook interface', async () => {
@@ -100,30 +63,6 @@ describe('useAppInitialization', () => {
     expect(result.current.isInitializing).toBe(false)
     expect(result.current.initData).toBeDefined()
     expect(result.current.initError).toBeUndefined()
-  })
-
-  it('parses sideview parameters from URL', async () => {
-    Object.defineProperty(window, 'location', {
-      value: {
-        href: 'https://app.test/?sideview=message:123',
-      },
-      writable: true,
-      configurable: true,
-    })
-
-    const mockHttpClient = createMockHttpClient(mockPostHogConfig)
-    const { result } = renderHook(() => useAppInitialization(mockHttpClient), {
-      wrapper: createTestProvider({ mockResponse: mockPostHogConfig }),
-    })
-
-    // Advance timers to complete initialization
-    await act(async () => {
-      await getClock().runAllAsync()
-    })
-
-    expect(result.current.initData).toBeDefined()
-    expect(result.current.initData?.sideviewType).toBe('message')
-    expect(result.current.initData?.sideviewId).toBe('123')
   })
 
   it('handles initialization gracefully when non-critical steps fail', async () => {

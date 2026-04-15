@@ -3,6 +3,7 @@ import { createElement, type ReactNode } from 'react'
 import { BrowserRouter } from 'react-router'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { setupTestDatabase, teardownTestDatabase } from '@/dal/test-utils'
+import type { ReturnContext } from '@/lib/oauth-state'
 import { getClock } from '@/testing-library'
 import { createQueryTestWrapper } from '@/test-utils/react-query'
 import {
@@ -111,6 +112,7 @@ describe('parseVerifyLinkCallback', () => {
     expect(result).toEqual({
       email: 'user@example.com',
       otp: '123456',
+      challengeToken: undefined,
     })
   })
 
@@ -121,6 +123,7 @@ describe('parseVerifyLinkCallback', () => {
     expect(result).toEqual({
       email: 'user@example.com',
       otp: '123456',
+      challengeToken: undefined,
     })
   })
 
@@ -173,6 +176,31 @@ describe('parseVerifyLinkCallback', () => {
     expect(result).toEqual({
       email: 'user+tag@example.com',
       otp: '123456',
+      challengeToken: undefined,
+    })
+  })
+
+  it('parses challengeToken when present', () => {
+    const url = new URL(
+      'https://thunderbolt.io/auth/verify?email=user%40example.com&otp=12345678&challengeToken=abc-123-def',
+    )
+    const result = parseVerifyLinkCallback(url)
+
+    expect(result).toEqual({
+      email: 'user@example.com',
+      otp: '12345678',
+      challengeToken: 'abc-123-def',
+    })
+  })
+
+  it('returns undefined challengeToken when not present', () => {
+    const url = new URL('https://thunderbolt.io/auth/verify?email=user%40example.com&otp=12345678')
+    const result = parseVerifyLinkCallback(url)
+
+    expect(result).toEqual({
+      email: 'user@example.com',
+      otp: '12345678',
+      challengeToken: undefined,
     })
   })
 })
@@ -230,7 +258,7 @@ describe('determineNavigationTarget', () => {
   })
 
   it('defaults to integrations page when returnContext is empty string', () => {
-    const result = determineNavigationTarget('', mockOAuthData)
+    const result = determineNavigationTarget('' as unknown as ReturnContext, mockOAuthData)
 
     expect(result).toEqual({
       path: '/settings/integrations',
@@ -239,7 +267,7 @@ describe('determineNavigationTarget', () => {
   })
 
   it('defaults to integrations page when returnContext is undefined', () => {
-    const result = determineNavigationTarget(undefined as unknown as string, mockOAuthData)
+    const result = determineNavigationTarget(undefined as unknown as ReturnContext, mockOAuthData)
 
     expect(result).toEqual({
       path: '/settings/integrations',
@@ -271,8 +299,17 @@ describe('determineNavigationTarget', () => {
     })
   })
 
+  it('rejects protocol-relative URLs starting with //', () => {
+    const result = determineNavigationTarget('//evil.com' as ReturnContext, mockOAuthData)
+
+    expect(result).toEqual({
+      path: '/settings/integrations',
+      oauth: mockOAuthData,
+    })
+  })
+
   it('handles relative-looking paths that do not start with /', () => {
-    const result = determineNavigationTarget('chats/123', mockOAuthData)
+    const result = determineNavigationTarget('chats/123' as unknown as ReturnContext, mockOAuthData)
 
     expect(result).toEqual({
       path: '/settings/integrations',

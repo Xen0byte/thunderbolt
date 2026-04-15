@@ -1,8 +1,8 @@
-import { getCorsOrigins, getSettings } from '@/config/settings'
+import { getCorsOriginsList, getSettings } from '@/config/settings'
 import { safeErrorHandler } from '@/middleware/error-handling'
+import { createSafeFetch, validateSafeUrl } from '@/utils/url-validation'
 import cors from '@elysiajs/cors'
 import { Elysia } from 'elysia'
-import { validateSafeUrl } from './link-preview'
 
 /**
  * General-purpose proxy routes
@@ -10,6 +10,7 @@ import { validateSafeUrl } from './link-preview'
  */
 export const createProxyRoutes = (fetchFn: typeof fetch = globalThis.fetch) => {
   const settings = getSettings()
+  const safeFetchFn = createSafeFetch(fetchFn)
 
   return new Elysia({
     prefix: '/proxy',
@@ -17,7 +18,7 @@ export const createProxyRoutes = (fetchFn: typeof fetch = globalThis.fetch) => {
     .onError(safeErrorHandler)
     .use(
       cors({
-        origin: getCorsOrigins(settings),
+        origin: getCorsOriginsList(settings),
         allowedHeaders: settings.corsAllowHeaders,
         exposeHeaders: settings.corsExposeHeaders,
       }),
@@ -62,7 +63,7 @@ export const createProxyRoutes = (fetchFn: typeof fetch = globalThis.fetch) => {
 
       try {
         // Make the proxied request
-        const response = await fetchFn(targetUrl, {
+        const response = await safeFetchFn(targetUrl, {
           method: 'GET',
           headers: {
             'User-Agent': 'Mozilla/5.0 (compatible; ThunderboltBot/1.0)',
@@ -89,6 +90,11 @@ export const createProxyRoutes = (fetchFn: typeof fetch = globalThis.fetch) => {
             responseHeaders.set(header, value)
           }
         })
+
+        // Prevent XSS: proxied content must never execute scripts in our origin
+        responseHeaders.set('content-security-policy', 'sandbox')
+        responseHeaders.set('content-disposition', 'attachment')
+        responseHeaders.set('x-content-type-options', 'nosniff')
 
         // Add cross-origin resource policy header (CORS plugin handles Access-Control-* headers)
         responseHeaders.set('cross-origin-resource-policy', 'cross-origin')

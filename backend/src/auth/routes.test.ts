@@ -1,13 +1,14 @@
 import * as settingsModule from '@/config/settings'
 import type { ConsoleSpies } from '@/test-utils/console-spies'
 import { setupConsoleSpy } from '@/test-utils/console-spies'
+import { mockAuth, mockAuthUnauthenticated } from '@/test-utils/mock-auth'
 import { afterAll, beforeAll, describe, expect, it, mock, spyOn } from 'bun:test'
 import { Elysia } from 'elysia'
 import { createGoogleAuthRoutes } from './google'
 import { createMicrosoftAuthRoutes } from './microsoft'
 
 describe('Authentication Routes', () => {
-  let app: Elysia
+  let app: { handle: Elysia['handle'] }
   let mockFetch: ReturnType<typeof mock>
   let getSettingsSpy: ReturnType<typeof spyOn>
   let consoleSpies: ConsoleSpies
@@ -40,7 +41,6 @@ describe('Authentication Routes', () => {
       posthogHost: 'https://us.i.posthog.com',
       posthogApiKey: '',
       corsOrigins: 'http://localhost:1420',
-      corsOriginRegex: '',
       corsAllowCredentials: true,
       corsAllowMethods: 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
       corsAllowHeaders: 'Content-Type,Authorization',
@@ -63,6 +63,10 @@ describe('Authentication Routes', () => {
       haystackPipelineId: '',
       haystackPipelines: '',
       enabledAgents: '',
+      betterAuthSecret: 'test-secret-at-least-32-chars-long!!',
+      rateLimitEnabled: false,
+      swaggerEnabled: false,
+      trustedProxy: '',
     })
 
     // Create mock fetch
@@ -70,13 +74,55 @@ describe('Authentication Routes', () => {
 
     // Inject mock fetch into routes
     app = new Elysia()
-      .use(createGoogleAuthRoutes(mockFetch as unknown as typeof fetch))
-      .use(createMicrosoftAuthRoutes(mockFetch as unknown as typeof fetch))
+      .use(createGoogleAuthRoutes(mockAuth, mockFetch as unknown as typeof fetch))
+      .use(createMicrosoftAuthRoutes(mockAuth, mockFetch as unknown as typeof fetch))
   })
 
   afterAll(async () => {
     getSettingsSpy?.mockRestore()
     consoleSpies.restore()
+  })
+
+  describe('auth guard', () => {
+    let unauthApp: { handle: Elysia['handle'] }
+
+    beforeAll(() => {
+      unauthApp = new Elysia()
+        .use(createGoogleAuthRoutes(mockAuthUnauthenticated, mockFetch as unknown as typeof fetch))
+        .use(createMicrosoftAuthRoutes(mockAuthUnauthenticated, mockFetch as unknown as typeof fetch))
+    })
+
+    it('should reject unauthenticated requests to Google config', async () => {
+      const response = await unauthApp.handle(new Request('http://localhost/auth/google/config'))
+      expect(response.status).toBe(401)
+    })
+
+    it('should reject unauthenticated requests to Google exchange', async () => {
+      const response = await unauthApp.handle(
+        new Request('http://localhost/auth/google/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: 'test', code_verifier: 'test', redirect_uri: 'http://localhost' }),
+        }),
+      )
+      expect(response.status).toBe(401)
+    })
+
+    it('should reject unauthenticated requests to Microsoft config', async () => {
+      const response = await unauthApp.handle(new Request('http://localhost/auth/microsoft/config'))
+      expect(response.status).toBe(401)
+    })
+
+    it('should reject unauthenticated requests to Microsoft exchange', async () => {
+      const response = await unauthApp.handle(
+        new Request('http://localhost/auth/microsoft/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: 'test', code_verifier: 'test', redirect_uri: 'http://localhost' }),
+        }),
+      )
+      expect(response.status).toBe(401)
+    })
   })
 
   describe('Google OAuth', () => {
@@ -134,6 +180,90 @@ describe('Authentication Routes', () => {
         }),
       )
       expect(response.status).toBe(422)
+    })
+  })
+
+  describe('redirect_uri validation', () => {
+    it('rejects Google exchange with disallowed redirect_uri', async () => {
+      mockFetch.mockClear()
+      const response = await app.handle(
+        new Request('http://localhost/auth/google/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: 'test-code',
+            code_verifier: 'test-verifier',
+            redirect_uri: 'https://evil.com/steal',
+          }),
+        }),
+      )
+      expect(response.status).toBe(400)
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    it('rejects Microsoft exchange with disallowed redirect_uri', async () => {
+      mockFetch.mockClear()
+      const response = await app.handle(
+        new Request('http://localhost/auth/microsoft/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: 'test-code',
+            code_verifier: 'test-verifier',
+            redirect_uri: 'https://evil.com/steal',
+          }),
+        }),
+      )
+      expect(response.status).toBe(400)
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    it('allows Google exchange with valid localhost redirect_uri', async () => {
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createMockOAuthResponse(200, {
+          access_token: 'token',
+          expires_in: 3600,
+          token_type: 'Bearer',
+        }),
+      )
+      const response = await app.handle(
+        new Request('http://localhost/auth/google/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: 'test-code',
+            code_verifier: 'test-verifier',
+            redirect_uri: 'http://localhost:1420/oauth/callback',
+          }),
+        }),
+      )
+      expect(response.status).toBe(200)
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
+
+    it('allows Microsoft exchange with valid localhost redirect_uri', async () => {
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createMockOAuthResponse(200, {
+          access_token: 'token',
+          expires_in: 3600,
+          token_type: 'Bearer',
+        }),
+      )
+      const response = await app.handle(
+        new Request('http://localhost/auth/microsoft/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: 'test-code',
+            code_verifier: 'test-verifier',
+            redirect_uri: 'http://localhost:1420/oauth/callback',
+          }),
+        }),
+      )
+      expect(response.status).toBe(200)
+      expect(mockFetch).toHaveBeenCalledTimes(1)
     })
   })
 })

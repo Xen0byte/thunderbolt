@@ -18,7 +18,6 @@ import { useMcpSync } from '@/hooks/use-mcp-sync'
 import ChatLayout from '@/layout/main-layout'
 import { PostHogProvider } from '@/lib/posthog'
 import { ThemeProvider } from '@/lib/theme-provider'
-import DevSettingsPage from '@/settings/dev-settings'
 import DevicesSettingsPage from '@/settings/devices'
 import { default as Settings } from '@/settings/index'
 import IntegrationsPage from '@/settings/integrations'
@@ -35,10 +34,10 @@ import { AuthGate } from './components/auth-gate'
 import NotFound from './components/not-found'
 import { OnboardingDialog } from './components/onboarding/onboarding-dialog'
 import { WelcomeDialog } from './components/welcome-dialog'
+import { PendingDeviceModal } from './components/pending-device-modal'
 import { UpdateNotification } from './components/update-notification'
 import { ExternalLinkDialogProvider } from './components/chat/markdown-utils'
 import { ContentViewProvider } from './content-view/context'
-import MessageSimulatorPage from './devtools/message-simulator'
 import { useAppInitialization } from './hooks/use-app-initialization'
 import { useCredentialEvents } from './hooks/use-credential-events'
 import { useSafeAreaInset } from './hooks/use-safe-area-inset'
@@ -58,6 +57,11 @@ import { type ComponentProps, Suspense, lazy, useEffect } from 'react'
 // for the extra bundle size and attack surface.
 const OidcRedirect = lazy(() => import('@/components/oidc-redirect'))
 
+// Dev-only routes: guarded by import.meta.env.DEV so Vite eliminates
+// both the lazy() call and the dynamic import() from production builds.
+const DevSettingsPage = import.meta.env.DEV ? lazy(() => import('@/settings/dev-settings')) : () => null
+const MessageSimulatorPage = import.meta.env.DEV ? lazy(() => import('./devtools/message-simulator')) : () => null
+
 const queryClient = new QueryClient()
 
 const AppContent = ({ initData }: { initData: InitData }) => {
@@ -70,6 +74,7 @@ const AppContent = ({ initData }: { initData: InitData }) => {
     <BrowserRouter>
       <AppRoutes initData={initData} />
       <UpdateNotification />
+      <PendingDeviceModal />
     </BrowserRouter>
   )
 }
@@ -138,7 +143,16 @@ const AppRoutes = ({ initData }: { initData: InitData }) => {
             <Route path="chats/:chatThreadId" element={<ChatDetailPage />} />
             {experimentalFeatureTasks.value && <Route path="tasks" element={<TasksPage />} />}
             <Route path="automations" element={<AutomationsPage />} />
-            <Route path="message-simulator" element={<MessageSimulatorPage />} />
+            {import.meta.env.DEV && (
+              <Route
+                path="message-simulator"
+                element={
+                  <Suspense>
+                    <MessageSimulatorPage />
+                  </Suspense>
+                }
+              />
+            )}
           </Route>
 
           {/* Settings routes with SettingsLayout */}
@@ -150,7 +164,16 @@ const AppRoutes = ({ initData }: { initData: InitData }) => {
             <Route path="agents" element={<AgentsSettingsPage />} />
             <Route path="mcp-servers" element={<McpServersPage />} />
             <Route path="integrations" element={<IntegrationsPage />} />
-            <Route path="dev-settings" element={<DevSettingsPage />} />
+            {import.meta.env.DEV && (
+              <Route
+                path="dev-settings"
+                element={
+                  <Suspense>
+                    <DevSettingsPage />
+                  </Suspense>
+                }
+              />
+            )}
           </Route>
         </Route>
       </Route>
@@ -196,17 +219,14 @@ export const App = () => {
         <QueryClientProvider client={queryClient}>
           <DatabaseProvider db={initData.db}>
             <HttpClientProvider httpClient={initData.httpClient}>
-              <AuthProvider>
+              <AuthProvider cloudUrl={initData.cloudUrl}>
                 <SignInModalProvider>
                   <PostHogProvider client={initData.posthogClient}>
                     <TrayProvider tray={initData.tray} window={initData.window}>
                       <MCPProvider>
                         <HapticsProvider>
                           <SidebarProvider>
-                            <ContentViewProvider
-                              initialSideviewType={initData.sideviewType}
-                              initialSideviewId={initData.sideviewId}
-                            >
+                            <ContentViewProvider>
                               <ExternalLinkDialogProvider>
                                 <AppContent initData={initData} />
                               </ExternalLinkDialogProvider>

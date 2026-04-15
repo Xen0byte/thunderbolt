@@ -26,10 +26,9 @@ import type { HaystackDocumentMeta, HaystackReferenceMeta } from '../shared/hays
 
 export type InitData = {
   db: AnyDrizzleDatabase
+  cloudUrl: string
   tray: TrayIcon | undefined
   window: Window | undefined
-  sideviewType: SideviewType | null
-  sideviewId: string | null
   posthogClient: PostHog | null
   httpClient: HttpClient
   experimentalFeatureTasks: boolean

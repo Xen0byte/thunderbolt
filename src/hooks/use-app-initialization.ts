@@ -1,19 +1,20 @@
 import type { HttpClient } from '@/contexts'
 import { getSettings } from '@/dal'
+import { getAuthToken } from '@/lib/auth-token'
 import { Database, getCurrentDatabase, setDatabase } from '@/db/database'
 import type { AnyDrizzleDatabase } from '@/db/database-interface'
+import { defaultSettingCloudUrl } from '@/defaults/settings'
 import { createHandleError } from '@/lib/error-utils'
 import { createAppDir, resetAppDir } from '@/lib/fs'
+import { createAuthenticatedClient } from '@/lib/http'
 import { getDatabasePath, getDatabaseType } from '@/lib/platform'
 import { initPosthog, trackError } from '@/lib/posthog'
 import { reconcileDefaults } from '@/lib/reconcile-defaults'
-import { parseSideviewParam } from '@/lib/sideview-url'
 import { TrayManager } from '@/lib/tray'
 import type { InitData } from '@/types'
 import type { HandleError, HandleResult } from '@/types/handle-errors'
 import type { TrayIcon } from '@tauri-apps/api/tray'
 import type { Window } from '@tauri-apps/api/window'
-import ky from 'ky'
 import type { PostHog } from 'posthog-js'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -103,17 +104,20 @@ const executeInitializationSteps = async (httpClient?: HttpClient): Promise<Hand
     }
   }
 
-  // Step 5: HTTP client initialization (use provided client or create one)
+  // Step 5: Get cloud url and experimental feature tasks
+  const { cloudUrl, experimentalFeatureTasks } = await getSettings(db, {
+    cloud_url: defaultSettingCloudUrl.value,
+    experimental_feature_tasks: false,
+  })
+
+  // Step 6: HTTP client initialization (use provided client or create one)
   let client: HttpClient
 
   if (httpClient) {
     client = httpClient
   } else {
     try {
-      const { cloudUrl } = await getSettings(db, {
-        cloud_url: 'http://localhost:8000/v1',
-      })
-      client = ky.create({ prefixUrl: cloudUrl })
+      client = createAuthenticatedClient(cloudUrl, getAuthToken)
     } catch (error) {
       console.error('Failed to initialize HTTP client:', error)
       const httpClientError = createHandleError('HTTP_CLIENT_INIT_FAILED', 'Failed to initialize HTTP client', error)
@@ -125,7 +129,7 @@ const executeInitializationSteps = async (httpClient?: HttpClient): Promise<Hand
     }
   }
 
-  // Step 6: Tray initialization (non-critical)
+  // Step 7: Tray initialization (non-critical)
   let tray: { tray: TrayIcon | undefined; window: Window | undefined } = { tray: undefined, window: undefined }
   try {
     tray = await initializeTray()
@@ -135,7 +139,7 @@ const executeInitializationSteps = async (httpClient?: HttpClient): Promise<Hand
     trackError(trayError, { initialization_step: 'tray' })
   }
 
-  // Step 7: PostHog initialization (non-critical)
+  // Step 8: PostHog initialization (non-critical)
   let posthogClient: PostHog | null = null
   try {
     posthogClient = await initializePostHog(client)
@@ -143,21 +147,12 @@ const executeInitializationSteps = async (httpClient?: HttpClient): Promise<Hand
     console.warn('Unexpected error during PostHog initialization:', error)
   }
 
-  const url = new URL(window.location.href)
-  const { type: sideviewType, id: sideviewId } = parseSideviewParam(url)
-
-  // Step 8: Get experimental feature tasks
-  const { experimentalFeatureTasks } = await getSettings(db, {
-    experimental_feature_tasks: false,
-  })
-
   return {
     success: true,
     data: {
       db,
+      cloudUrl,
       experimentalFeatureTasks,
-      sideviewType,
-      sideviewId,
       posthogClient,
       httpClient: client,
       ...tray,

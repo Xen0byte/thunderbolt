@@ -30,28 +30,15 @@ type ContentViewContextType = {
 
 const ContentViewContext = createContext<ContentViewContextType | undefined>(undefined)
 
-type ContentViewProviderProps = {
-  children: ReactNode
-  initialSideviewType?: string | null
-  initialSideviewId?: string | null
-}
-
 /**
  * Unified provider for managing the content view
  *
  * The content view can display:
  * - Object views (tool call results)
  * - Webview previews (link previews)
- * - Sideviews (email detail, task detail, etc)
- *
- * Optionally accepts initial sideview state to open on mount
  */
-export const ContentViewProvider = ({ children, initialSideviewType, initialSideviewId }: ContentViewProviderProps) => {
-  const [state, setState] = useState<ContentViewState>(() =>
-    initialSideviewType && initialSideviewId
-      ? { type: 'sideview' as const, data: { sideviewType: initialSideviewType, sideviewId: initialSideviewId } }
-      : { type: null, data: null },
-  )
+export const ContentViewProvider = ({ children }: { children: ReactNode }) => {
+  const [state, setState] = useState<ContentViewState>({ type: null, data: null })
   const [previewHidden, setPreviewHidden] = useState(false)
   const { isMobile } = useIsMobile()
   const prevIsMobile = useRef(isMobile)
@@ -94,15 +81,15 @@ export const ContentViewProvider = ({ children, initialSideviewType, initialSide
   }, [])
 
   const showSideview = useCallback((sideviewType: string | null, sideviewId: string | null) => {
-    if (sideviewType === null || sideviewId === null) {
+    if (!sideviewType || !sideviewId) {
       setState({ type: null, data: null })
-    } else {
-      trackEvent('content_view_open', { view_type: 'sideview', sideview_type: sideviewType })
-      setState({
-        type: 'sideview',
-        data: { sideviewType, sideviewId },
-      })
+      return
     }
+    trackEvent('content_view_open', { view_type: 'sideview', sideview_type: sideviewType })
+    setState({
+      type: 'sideview',
+      data: { sideviewType, sideviewId },
+    })
   }, [])
 
   const close = useCallback(() => {
@@ -181,10 +168,12 @@ export const useSetPreviewHidden = (): ((hidden: boolean) => void) | undefined =
 }
 
 export const useSideview = () => {
-  const { showSideview, state } = useContentView()
+  const { state, showSideview, close } = useContentView()
+  const sideviewData = state.type === 'sideview' ? state.data : null
   return {
-    sideviewType: state.type === 'sideview' ? state.data.sideviewType : null,
-    sideviewId: state.type === 'sideview' ? state.data.sideviewId : null,
-    setSideview: showSideview,
+    sideviewType: sideviewData?.sideviewType ?? null,
+    sideviewId: sideviewData?.sideviewId ?? null,
+    showSideview,
+    closeSideview: close,
   }
 }

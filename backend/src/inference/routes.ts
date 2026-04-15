@@ -1,8 +1,10 @@
+import type { Auth } from '@/auth/elysia-plugin'
+import { createAuthMacro } from '@/auth/elysia-plugin'
 import { safeErrorHandler } from '@/middleware/error-handling'
 import { isPostHogConfigured } from '@/posthog/client'
 import { createSSEStreamFromCompletion } from '@/utils/streaming'
 import type { OpenAI as PostHogOpenAI } from '@posthog/ai'
-import { Elysia } from 'elysia'
+import { Elysia, type AnyElysia } from 'elysia'
 import { APIConnectionError, APIConnectionTimeoutError } from 'openai'
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 import { getInferenceClient, type InferenceProvider } from './client'
@@ -42,12 +44,17 @@ export const supportedModels: Record<string, ModelConfig> = {
 /**
  * Inference API routes
  */
-export const createInferenceRoutes = () => {
-  return new Elysia({
+export const createInferenceRoutes = (auth: Auth, rateLimit?: AnyElysia) => {
+  const app = new Elysia({
     prefix: '/chat',
-  })
-    .onError(safeErrorHandler)
-    .post('/completions', async (ctx) => {
+  }).onError(safeErrorHandler)
+
+  return app.use(createAuthMacro(auth)).guard({ auth: true }, (guardedApp) => {
+    if (rateLimit) {
+      guardedApp.use(rateLimit)
+    }
+
+    return guardedApp.post('/completions', async (ctx) => {
       const body = await ctx.request.json()
 
       if (!body.stream) {
@@ -86,13 +93,21 @@ export const createInferenceRoutes = () => {
 
         const stream = createSSEStreamFromCompletion(completion, body.model)
 
-        return new Response(stream, {
-          headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            Connection: 'keep-alive',
-          },
-        })
+        // Merge rate-limit headers (set by middleware on ctx.set.headers) into the
+        // streaming Response so clients can read them. Elysia skips ctx.set.headers
+        // when the handler returns a raw Response.
+        const responseHeaders: Record<string, string> = {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        }
+        for (const [key, value] of Object.entries(ctx.set.headers)) {
+          if (value != null) {
+            responseHeaders[key] = String(value)
+          }
+        }
+
+        return new Response(stream, { headers: responseHeaders })
       } catch (error) {
         if (error instanceof APIConnectionError) {
           console.error('Failed to connect to inference provider', error.cause)
@@ -105,6 +120,7 @@ export const createInferenceRoutes = () => {
         throw error
       }
     })
+  })
 }
 
 /**

@@ -1,5 +1,6 @@
 import { useDatabase } from '@/contexts'
 import { getSettings } from '@/dal'
+import type { ReturnContext } from '@/lib/oauth-state'
 import { isTauri } from '@/lib/platform'
 import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link'
 import { useEffect } from 'react'
@@ -16,6 +17,7 @@ type OAuthCallbackData = {
 type VerifyLinkData = {
   email: string
   otp: string
+  challengeToken?: string
 }
 
 type NavigateTarget = {
@@ -29,10 +31,10 @@ type NavigateTarget = {
  * Exported for testing
  */
 export const determineNavigationTarget = (
-  oauthReturnContext: string | null,
+  oauthReturnContext: ReturnContext | null,
   oauth: OAuthCallbackData,
 ): NavigateTarget => {
-  if (oauthReturnContext?.startsWith('/')) {
+  if (oauthReturnContext?.startsWith('/') && !oauthReturnContext.startsWith('//')) {
     return { path: oauthReturnContext, oauth }
   }
 
@@ -86,7 +88,7 @@ export const parseVerifyLinkCallback = (url: URL): VerifyLinkData | null => {
     return null
   }
 
-  return { email, otp }
+  return { email, otp, challengeToken: url.searchParams.get('challengeToken') ?? undefined }
 }
 
 type DeepLinkDependencies = {
@@ -147,7 +149,7 @@ export const useDeepLinkListener = (handler?: DeepLinkHandler, dependencies?: De
           if (oauthData) {
             // Get the return context from SQLite settings (where mobile flow stores it)
             const settings = await getSettingsData(db, { oauth_return_context: String })
-            const target = determineNavigationTarget(settings.oauthReturnContext, oauthData)
+            const target = determineNavigationTarget(settings.oauthReturnContext as ReturnContext | null, oauthData)
 
             navigate(target.path, {
               state: { oauth: target.oauth },
@@ -159,9 +161,12 @@ export const useDeepLinkListener = (handler?: DeepLinkHandler, dependencies?: De
           // Handle verify link callback deep links (email + OTP from magic link)
           const verifyData = parseVerifyLinkCallback(url)
           if (verifyData) {
-            // Navigate to the verify page with email and otp params
+            // Navigate to the verify page with email, otp, and challengeToken params
             // The MagicLinkVerify component will use these to call emailOtp sign-in
             const params = new URLSearchParams({ email: verifyData.email, otp: verifyData.otp })
+            if (verifyData.challengeToken) {
+              params.set('challengeToken', verifyData.challengeToken)
+            }
             navigate(`/auth/verify?${params.toString()}`, {
               replace: true,
             })
