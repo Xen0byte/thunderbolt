@@ -1,7 +1,7 @@
 {
   "name": "thunderbolt",
   "private": true,
-  "version": "0.1.87",
+  "version": "0.1.87-nightly.20260415",
   "description": "Thunderbolt",
   "type": "module",
   "license": "MPL-2.0",
@@ -114,7 +114,6 @@
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
-
     "uuid": "^11.1.0",
     "web-haptics": "^0.0.6",
     "zod": "^4.0.17",
