@@ -116,10 +116,10 @@ const AppRoutes = ({ initData }: { initData: InitData }) => {
         </Route>
       )}
 
-      {/* Main app routes - authenticated only (pass-through when waitlist disabled) */}
+      {/* Main app routes - authenticated only (pass-through when waitlist and OIDC both disabled) */}
       <Route
         element={
-          waitlistEnabled ? (
+          oidcMode || waitlistEnabled ? (
             <AuthGate require="authenticated" redirectTo={oidcMode ? '/oidc-redirect' : '/waitlist'} />
           ) : (
             <Outlet />
