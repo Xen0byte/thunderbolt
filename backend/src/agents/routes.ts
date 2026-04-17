@@ -4,7 +4,12 @@ import { Elysia, t } from 'elysia'
 import type { AgentDescriptor, AgentProvider } from './types'
 
 /**
- * Creates agent discovery routes.
+ * Creates the public agent discovery endpoint.
+ *
+ * Intentionally unauthenticated — returns metadata about enabled agents only
+ * (no user-specific data). Clients need to discover available agents before
+ * authenticating to use any of them. Reviewed and approved in PR #531.
+ *
  * GET /agents — returns available agents, optionally filtered by type or id.
  */
 export const createAgentsRoutes = (providers: AgentProvider[] = []) => {

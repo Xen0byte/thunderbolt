@@ -5,6 +5,8 @@ import {
   classifyMessage,
   clearConnections,
   createAgentProxyRoutes,
+  handleHttpMessage,
+  type HttpConnectionState,
   parseApiKey,
   parseClientMessage,
   parseSSEStream,
@@ -82,6 +84,27 @@ describe('parseClientMessage', () => {
   it('passes through non-string objects as-is', () => {
     const obj = { method: 'ping', id: 1 }
     expect(parseClientMessage(obj)).toBe(obj)
+  })
+
+  it('returns null for Uint8Array (binary frame)', () => {
+    expect(parseClientMessage(new Uint8Array([1, 2, 3]))).toBeNull()
+  })
+
+  it('returns null for Buffer (binary frame)', () => {
+    expect(parseClientMessage(Buffer.from([1, 2, 3]))).toBeNull()
+  })
+
+  it('returns null for null', () => {
+    expect(parseClientMessage(null)).toBeNull()
+  })
+
+  it('returns null for arrays', () => {
+    expect(parseClientMessage([1, 2, 3])).toBeNull()
+  })
+
+  it('returns null for primitives', () => {
+    expect(parseClientMessage(42)).toBeNull()
+    expect(parseClientMessage(true)).toBeNull()
   })
 })
 
@@ -308,5 +331,47 @@ describe('createAgentProxyRoutes (open handler)', () => {
     expect(ws.closeCalls).toEqual([])
     // Ticket must have been consumed (one-time use).
     expect(consumeWsTicket(ticketId)).toBeNull()
+  })
+})
+
+// ── handleHttpMessage tests ─────────────────────────────────────────────────
+
+const createHttpState = (): HttpConnectionState => ({
+  type: 'http',
+  agentUrl: 'https://agent.example.com/acp',
+  apiKey: null,
+  connectionId: null,
+  sessionId: null,
+  activeAborts: new Set(),
+  closed: false,
+})
+
+describe('handleHttpMessage', () => {
+  it('preserves the JSON-RPC request id in the error response when upstream returns non-JSON', async () => {
+    const ws = createMockWs()
+    const state = createHttpState()
+    const fakeFetch = async () =>
+      new Response('<html>oops</html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      })
+
+    await handleHttpMessage(ws, JSON.stringify({ jsonrpc: '2.0', method: 'ping', id: 42 }), state, fakeFetch)
+
+    expect(ws.sentMessages).toHaveLength(1)
+    const payload = JSON.parse(ws.sentMessages[0]!) as { id: unknown; error: { code: number } }
+    expect(payload.id).toBe(42)
+    expect(payload.error.code).toBe(-32603)
+  })
+
+  it('preserves a string request id in the error response', async () => {
+    const ws = createMockWs()
+    const state = createHttpState()
+    const fakeFetch = async () => new Response('not json', { status: 200, headers: { 'Content-Type': 'text/plain' } })
+
+    await handleHttpMessage(ws, JSON.stringify({ jsonrpc: '2.0', method: 'ping', id: 'abc-123' }), state, fakeFetch)
+
+    const payload = JSON.parse(ws.sentMessages[0]!) as { id: unknown }
+    expect(payload.id).toBe('abc-123')
   })
 })

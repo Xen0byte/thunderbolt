@@ -37,12 +37,15 @@ export const parseApiKey = (authMethod: string | null): string | null => {
 }
 
 /**
- * Parses a raw WebSocket message from the downstream client into a JSON object.
- * Returns null if the message is a string that fails JSON parsing, so callers
- * can report a JSON-RPC parse error without crashing the relay.
+ * Parses an incoming WS client message into a JSON-RPC object, or `null` if invalid.
+ * Accepts strings (parsed as JSON), already-deserialized plain objects (passed through),
+ * and rejects binary frames (Uint8Array/Buffer), arrays, and primitives.
  */
 export const parseClientMessage = (message: unknown): Record<string, unknown> | null => {
-  if (typeof message !== 'string') return message as Record<string, unknown>
+  if (typeof message === 'object' && message !== null && !Array.isArray(message) && !(message instanceof Uint8Array)) {
+    return message as Record<string, unknown>
+  }
+  if (typeof message !== 'string') return null
   try {
     return JSON.parse(message) as Record<string, unknown>
   } catch {
@@ -96,7 +99,7 @@ const openWsRelay = (ws: ElysiaWS, url: string, apiKey: string | null): WsConnec
 
 // ── HTTP/SSE relay ───────────────────────────────────────────────────────────
 
-type HttpConnectionState = {
+export type HttpConnectionState = {
   type: 'http'
   agentUrl: string
   apiKey: string | null
@@ -137,7 +140,7 @@ export async function* parseSSEStream(body: ReadableStream<Uint8Array>): AsyncGe
           .map((line) => line.slice(line.startsWith('data: ') ? 6 : 5))
 
         if (dataLines.length > 0) {
-          const data = dataLines.join('')
+          const data = dataLines.join('\n')
           try {
             yield JSON.parse(data)
           } catch {
@@ -173,9 +176,20 @@ const openHttpRelay = (url: string, apiKey: string | null): HttpConnectionState 
   closed: false,
 })
 
-const safeFetch = createSafeFetch(globalThis.fetch)
+type FetchImpl = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
-const handleHttpMessage = async (ws: ElysiaWS, message: unknown, state: HttpConnectionState) => {
+const defaultSafeFetch: FetchImpl = createSafeFetch(globalThis.fetch)
+
+/**
+ * Handles a JSON-RPC message from the downstream WS client over an HTTP/SSE upstream.
+ * The `fetchImpl` parameter allows tests to inject a fake fetch without touching globals.
+ */
+export const handleHttpMessage = async (
+  ws: ElysiaWS,
+  message: unknown,
+  state: HttpConnectionState,
+  fetchImpl: FetchImpl = defaultSafeFetch,
+) => {
   const msg = parseClientMessage(message)
   if (msg === null) {
     console.warn('[agent-proxy] Dropped non-JSON client message:', String(message).slice(0, 200))
@@ -194,7 +208,7 @@ const handleHttpMessage = async (ws: ElysiaWS, message: unknown, state: HttpConn
 
   if (msgType === 'notification' || msgType === 'response') {
     try {
-      await safeFetch(state.agentUrl, {
+      await fetchImpl(state.agentUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify(msg),
@@ -212,7 +226,7 @@ const handleHttpMessage = async (ws: ElysiaWS, message: unknown, state: HttpConn
   const timeout = setTimeout(() => ac.abort(), proxyTimeoutMs)
 
   try {
-    const response = await safeFetch(state.agentUrl, {
+    const response = await fetchImpl(state.agentUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify(msg),
@@ -244,7 +258,7 @@ const handleHttpMessage = async (ws: ElysiaWS, message: unknown, state: HttpConn
           JSON.stringify({
             jsonrpc: '2.0',
             error: { code: -32603, message: 'Upstream returned non-JSON response' },
-            id: null,
+            id: (msg.id as string | number | null) ?? null,
           }),
         )
       }
