@@ -346,6 +346,18 @@ describe('createAgentProxyRoutes (open handler)', () => {
     expect(ws.closeCalls[0]!.code).toBe(4003)
   })
 
+  it('closes with 4003 when http:// is paired with an apiKey (cleartext credential)', async () => {
+    const open = getOpenHandler()
+    const ticketId = createWsTicket('user-http-apikey', {
+      url: 'http://agent.example.com/acp',
+      authMethod: '{"apiKey":"test-key"}',
+    })
+    const ws = createMockWs(ticketId)
+    await open(ws)
+    expect(ws.closeCalls).toHaveLength(1)
+    expect(ws.closeCalls[0]!.code).toBe(4003)
+  })
+
   it('consumes a valid ticket and opens an upstream connection (http scheme)', async () => {
     const open = getOpenHandler()
     // Use a public-looking hostname so SSRF validation passes. The handler will

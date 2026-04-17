@@ -327,10 +327,11 @@ export const createAgentProxyRoutes = () => {
         const apiKey = parseApiKey(authMethod ?? null)
         const isWebSocket = agentUrl.startsWith('ws://') || agentUrl.startsWith('wss://')
 
-        // Block API keys over unencrypted ws:// — the Sec-WebSocket-Protocol header
-        // would transmit `Bearer.{apiKey}` in cleartext. Require wss:// for auth.
-        if (agentUrl.startsWith('ws://') && apiKey) {
-          ws.close(4003, 'API keys require wss:// (encrypted WebSocket)')
+        // Block API keys over unencrypted transports — ws:// leaks `Bearer.{apiKey}`
+        // in the Sec-WebSocket-Protocol header, and http:// leaks the Authorization
+        // header in cleartext. Require encrypted upstream (wss:// or https://).
+        if (apiKey && (agentUrl.startsWith('ws://') || agentUrl.startsWith('http://'))) {
+          ws.close(4003, 'API keys require encrypted upstream (wss:// or https://)')
           return
         }
 
