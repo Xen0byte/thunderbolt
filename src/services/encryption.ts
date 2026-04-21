@@ -1,5 +1,7 @@
 import { type HttpClient } from '@/contexts'
+import { createHandleError } from '@/lib/error-utils'
 import { HttpError } from '@/lib/http'
+import { trackError } from '@/lib/posthog'
 import {
   generateKeyPair,
   generateMlKemKeyPair,
@@ -199,12 +201,15 @@ export const denyDeviceWithProof = async (httpClient: HttpClient, deviceId: stri
  * (the backend skips canary verification when no encryption metadata exists).
  */
 export const revokeDeviceWithProof = async (httpClient: HttpClient, deviceId: string): Promise<void> => {
-  let canarySecret: string | undefined
-  try {
-    canarySecret = await extractCanarySecret(httpClient)
-  } catch {
-    // E2EE not set up (fetchCanary 404) or CK unavailable — proceed without proof
-  }
+  const canarySecret = await extractCanarySecret(httpClient).catch((err: unknown) => {
+    if (err instanceof HttpError && err.response.status === 404) {
+      return undefined
+    }
+    trackError(
+      createHandleError('CANARY_EXTRACTION_FAILED', 'Failed to extract canary secret during device revocation', err),
+    )
+    throw err
+  })
   await revokeDeviceApi(httpClient, deviceId, canarySecret)
 }
 
