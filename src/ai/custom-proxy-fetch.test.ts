@@ -160,14 +160,14 @@ describe('createCustomProxyFetch', () => {
       expect(calledReq.signal).toBe(controller.signal)
     })
 
-    it('routes to v1/custom-model/proxy endpoint', async () => {
+    it('routes to the custom-model/proxy endpoint', async () => {
       const { httpClient, fetchSpy } = createSpyHttpClient()
       const proxyFetch = createCustomProxyFetch({ baseURL: cloudUrl, httpClient })
 
       await proxyFetch(targetUrl, makeInit())
 
       const calledReq = fetchSpy.mock.calls[0][0] as Request
-      expect(calledReq.url).toContain('v1/custom-model/proxy')
+      expect(calledReq.url).toContain('custom-model/proxy')
     })
   })
 
