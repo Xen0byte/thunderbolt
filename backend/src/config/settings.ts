@@ -76,8 +76,6 @@ const settingsSchema = z
     customProxyRequestTimeoutMs: z.coerce.number().int().positive().default(300000),
     /** Per-user rate limit: requests per minute (default 60). */
     customProxyRateLimitPerUserPerMin: z.coerce.number().int().positive().default(60),
-    /** Per-target-host global rate limit: requests per minute (default 1000). */
-    customProxyRateLimitPerHostPerMin: z.coerce.number().int().positive().default(1000),
     /** Comma-separated allowlist of upstream path suffixes. */
     customProxyAllowedPaths: z.string().default('/v1/models,/v1/chat/completions,/v1/completions'),
     /** Allow HTTP (non-TLS) upstream URLs (true in dev, false in production). */
@@ -86,9 +84,6 @@ const settingsSchema = z
     customProxyAbuseContact: z.string().default('abuse@thunderbolt.io'),
     /** Outbound User-Agent header value. */
     customProxyUserAgent: z.string().default('Thunderbolt-Proxy/1.0'),
-    /** DNS resolution timeout in ms (default 5 s). Defends against slow-DNS DoS. */
-    customProxyDnsTimeoutMs: z.coerce.number().int().positive().default(5000),
-
     // Trusted proxy (controls which proxy headers are trusted for IP extraction)
     // Set to 'cloudflare' to trust CF-Connecting-IP, 'akamai' for True-Client-IP,
     // or leave empty to use only the direct socket IP (proxy headers are NOT trusted)
@@ -159,12 +154,10 @@ const parseSettings = (): Settings => {
     customProxyMaxBytes: process.env.CUSTOM_PROXY_MAX_BYTES || '52428800',
     customProxyRequestTimeoutMs: process.env.CUSTOM_PROXY_REQUEST_TIMEOUT_MS || '300000',
     customProxyRateLimitPerUserPerMin: process.env.CUSTOM_PROXY_RATE_LIMIT_PER_USER_PER_MIN || '60',
-    customProxyRateLimitPerHostPerMin: process.env.CUSTOM_PROXY_RATE_LIMIT_PER_HOST_PER_MIN || '1000',
     customProxyAllowedPaths: process.env.CUSTOM_PROXY_ALLOWED_PATHS || '/v1/models,/v1/chat/completions,/v1/completions',
     customProxyAllowHttp: process.env.CUSTOM_PROXY_ALLOW_HTTP === 'true',
     customProxyAbuseContact: process.env.CUSTOM_PROXY_ABUSE_CONTACT || 'abuse@thunderbolt.io',
     customProxyUserAgent: process.env.CUSTOM_PROXY_USER_AGENT || 'Thunderbolt-Proxy/1.0',
-    customProxyDnsTimeoutMs: process.env.CUSTOM_PROXY_DNS_TIMEOUT_MS || '5000',
   }
 
   return settingsSchema.parse(env)
