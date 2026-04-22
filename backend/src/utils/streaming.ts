@@ -1,9 +1,9 @@
-import type { Stream } from 'openai/streaming'
-
 type ChatCompletionChunk = {
   usage?: any
   [key: string]: any
 }
+
+type CompletionStream = AsyncIterable<ChatCompletionChunk> & { controller?: AbortController }
 
 /**
  * Creates a ReadableStream from an OpenAI completion stream with SSE formatting
@@ -12,7 +12,7 @@ type ChatCompletionChunk = {
  * @returns ReadableStream formatted for Server-Sent Events
  */
 export const createSSEStreamFromCompletion = (
-  completion: Stream<ChatCompletionChunk>,
+  completion: CompletionStream,
   model: string,
 ): ReadableStream<Uint8Array> => {
   const encoder = new TextEncoder()
