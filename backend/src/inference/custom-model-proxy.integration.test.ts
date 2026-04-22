@@ -1,15 +1,7 @@
 /**
- * TLS-SNI monitoring integration test.
- *
- * Tagged: network — runs in nightly CI only; non-blocking for PR merge.
- * Set INTEGRATION=1 to run locally.
- *
- * Purpose: verify that createSafeFetch completes a TLS handshake against
- * api.openai.com and returns HTTP 401 (not a TLS error). A TLS-level failure
- * would indicate Bun #27890 (hostname-is-IP SNI regression) and block
- * production cutover.
- *
- * See RESEARCH-001 v4 §A10 step 4 + contract §v4 new ACs.
+ * Set INTEGRATION=1 to run. Verifies that createSafeFetch completes a TLS
+ * handshake against api.openai.com and returns HTTP 401 (not a TLS error).
+ * A TLS-level failure would indicate Bun #27890 (hostname-is-IP SNI regression).
  */
 import { describe, expect, it } from 'bun:test'
 import { createSafeFetch } from '@/utils/url-validation'
