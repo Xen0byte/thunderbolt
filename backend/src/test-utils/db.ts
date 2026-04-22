@@ -40,7 +40,7 @@ class TestDbManager {
    */
   async createTestDb() {
     if (!this.initialized) {
-      throw new Error('TestDbManager not initialized. Call initialize() first or import test-setup.ts')
+      await this.initialize()
     }
 
     // Start a transaction using Drizzle's API
