@@ -29,8 +29,8 @@ What it does:
 
 1. `make doctor-q` — verify required tools (only prints issues)
 2. `make setup` — install frontend and backend dependencies
-3. `make docker-up` — start Docker containers
-4. `make docker-status` — confirm containers are healthy
+3. `make up` — start Docker/Podman containers
+4. `make status` — confirm containers are healthy
 5. _(with `all`)_ `make run` — start backend (:8000) and frontend (:5173) dev servers
 
 When given a Linear ticket ID or branch name, it creates a git worktree first, then bootstraps inside it.
@@ -169,3 +169,21 @@ Submit feedback about Thunderbolt as a GitHub issue.
 ```
 
 Creates a labeled issue on the Thunderbolt GitHub repo.
+
+## Syncing Skills
+
+The slash commands in `.claude/commands/` are managed via [git subtree](https://www.atlassian.com/git/tutorials/git-subtree) from the [thunderbot](https://github.com/thunderbird/thunderbot) repo. You can edit them here as normal files and sync changes in both directions.
+
+```bash
+# Pull latest skills from thunderbot
+git subtree pull --prefix=.claude/commands thunderbot main --squash
+
+# Push local skill edits back to thunderbot
+git subtree push --prefix=.claude/commands thunderbot main
+```
+
+If you haven't added the remote yet:
+
+```bash
+git remote add thunderbot git@github.com:thunderbird/thunderbot.git
+```

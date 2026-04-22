@@ -1,5 +1,7 @@
 # Thunderbolt Enterprise Deployment
 
+> ⚠️ **Under active development — not production ready.** Thunderbolt is currently undergoing a security audit and preparing for enterprise production readiness. These deployment paths are provided for evaluation and early testing. Do not use in production environments.
+
 Self-hosted Thunderbolt with OIDC authentication via Keycloak. Three deployment paths: Docker Compose for local development, Helm chart for Kubernetes, and Pulumi for AWS (Fargate or EKS).
 
 ## Table of Contents
@@ -131,7 +133,7 @@ First boot takes a few minutes as images build and Keycloak initializes.
 |---------|-----|-------------|
 | App | http://localhost:3000 | Sign in via Keycloak |
 | Keycloak Admin | http://localhost:8180/admin | admin / admin |
-| Demo User | (Keycloak login) | demo@thunderbolt.so / demo |
+| Demo User | (Keycloak login) | demo@thunderbolt.io / demo |
 | Postgres | localhost:5433 | postgres / postgres |
 | PowerSync | http://localhost:8080 | |
 
@@ -532,13 +534,13 @@ All deployment paths use the same defaults. Override for production.
 | OIDC client secret | `thunderbolt-enterprise-secret` | Backend, Keycloak |
 | PowerSync JWT secret | `enterprise-powersync-secret` | Backend, PowerSync |
 | Better Auth secret | `enterprise-better-auth-secret` | Backend |
-| Demo user | `demo@thunderbolt.so` / `demo` | Keycloak |
+| Demo user | `demo@thunderbolt.io` / `demo` | Keycloak |
 
 ### Keycloak
 
 The realm `thunderbolt` is auto-imported from `config/keycloak-realm.json` on first boot:
 - OIDC client: `thunderbolt-app` (confidential)
-- Demo user: `demo@thunderbolt.so` / `demo`
+- Demo user: `demo@thunderbolt.io` / `demo`
 - Admin console at `/auth/admin` (Docker Compose: port 8180, Kubernetes/AWS: via ingress at `/auth`)
 
 ### PowerSync

@@ -19,7 +19,7 @@ helm install thunderbolt . -n thunderbolt --create-namespace
 kubectl get pods -n thunderbolt -w
 ```
 
-App is at `http://localhost` (with ingress). Demo login: `demo@thunderbolt.so` / `demo`.
+App is at `http://localhost` (with ingress). Demo login: `demo@thunderbolt.io` / `demo`.
 
 ## Values
 
