@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, beforeEach, mock } from 'bun:test'
 import { generateCK } from '@/crypto'
-import { resetConfigStore, useConfigStore } from '@/api/config-store'
+import { useConfigStore } from '@/api/config-store'
 
 let mockCK: CryptoKey | null = null
 
@@ -24,7 +24,7 @@ describe('encodeForUpload', () => {
   })
 
   afterEach(() => {
-    resetConfigStore()
+    useConfigStore.setState({ config: {} })
   })
 
   it('encrypts encrypted columns for known tables', async () => {

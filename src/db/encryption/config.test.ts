@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test'
-import { resetConfigStore, useConfigStore } from '@/api/config-store'
+import { useConfigStore } from '@/api/config-store'
 
 // Other test files mock the @/db/encryption barrel with isEncryptionEnabled: () => true.
 // Bun's mock.module leaks across files and replaces the underlying config module too.
@@ -20,7 +20,7 @@ import { isEncryptionEnabled } from './config'
 
 describe('encryption config', () => {
   afterEach(() => {
-    resetConfigStore()
+    useConfigStore.setState({ config: {} })
   })
 
   describe('isEncryptionEnabled', () => {
