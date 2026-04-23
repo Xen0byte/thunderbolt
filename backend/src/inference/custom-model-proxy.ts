@@ -66,27 +66,6 @@ const isAllowedContentType = (contentType: string | null): boolean => {
   return allowedContentTypes.includes(mime)
 }
 
-const hopByHop = new Set([
-  'connection',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailers',
-  'transfer-encoding',
-  'upgrade',
-  'set-cookie',
-  // Body-describing headers lose meaning after we re-serialize the upstream body.
-  'content-encoding',
-  'content-length',
-])
-
-const stripHopByHop = (headers: Headers): Headers => {
-  const out = new Headers(headers)
-  for (const key of hopByHop) out.delete(key)
-  return out
-}
-
 class ProxyRequestError extends Error {
   constructor(
     public readonly code: ProxyErrorEnvelope['error']['code'],
@@ -407,12 +386,9 @@ export const createCustomModelProxyRoutes = (auth: Auth) =>
             return proxyError('UPSTREAM_UNREACHABLE', 'Upstream models response has unexpected shape.', 502)
           }
 
-          const cleanedHeaders = stripHopByHop(response.headers)
-
           return new Response(JSON.stringify(parsed), {
             status: 200,
             headers: {
-              ...Object.fromEntries(cleanedHeaders.entries()),
               'Content-Type': 'application/json',
               'Cache-Control': 'no-store',
             },
