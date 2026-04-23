@@ -4,16 +4,19 @@ import { useConfigStore } from '@/api/config-store'
 // Other test files mock the @/db/encryption barrel with isEncryptionEnabled: () => true.
 // Bun's mock.module leaks across files and replaces the underlying config module too.
 // Re-provide the real implementation here so these tests exercise actual config store logic.
+// Use ...spread to preserve exports like encryptedColumnsMap that other tests depend on.
+const realConfig = await import('./config')
 mock.module('@/db/encryption/config', () => ({
+  ...realConfig,
   isEncryptionEnabled: () => useConfigStore.getState().config.e2eeEnabled === true,
   needsSyncSetupWizard: async () => false,
-  encryptedColumnsMap: {},
 }))
 
+const realEncryption = await import('@/db/encryption')
 mock.module('@/db/encryption', () => ({
+  ...realEncryption,
   isEncryptionEnabled: () => useConfigStore.getState().config.e2eeEnabled === true,
   needsSyncSetupWizard: async () => false,
-  encryptedColumnsMap: {},
 }))
 
 import { isEncryptionEnabled } from './config'

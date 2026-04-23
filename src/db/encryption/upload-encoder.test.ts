@@ -13,6 +13,14 @@ mock.module('@/crypto/key-storage', () => ({
   clearAllKeys: async () => {},
 }))
 
+// Re-provide config module to override leaked mocks from other test files
+// (bun's mock.module leaks across files and can replace encryptedColumnsMap with {})
+const realConfig = await import('./config')
+mock.module('@/db/encryption/config', () => ({
+  ...realConfig,
+  isEncryptionEnabled: () => useConfigStore.getState().config.e2eeEnabled === true,
+}))
+
 const { invalidateCKCache } = await import('./codec')
 const { encodeForUpload } = await import('./upload-encoder')
 

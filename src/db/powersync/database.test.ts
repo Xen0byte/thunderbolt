@@ -2,16 +2,18 @@ import { describe, expect, it, mock } from 'bun:test'
 import { WASQLiteOpenFactory } from '@powersync/web'
 
 // Control E2EE flag directly — avoids contamination from other test files
-// that mock the @/db/encryption barrel with isEncryptionEnabled: () => true
+// that mock the @/db/encryption barrel with isEncryptionEnabled: () => true.
+// Use ...spread to preserve exports like encryptedColumnsMap that other tests depend on.
 let mockE2EEEnabled = false
 
+const realConfig = await import('@/db/encryption/config')
 mock.module('@/db/encryption/config', () => ({
+  ...realConfig,
   isEncryptionEnabled: () => mockE2EEEnabled,
   needsSyncSetupWizard: async () => false,
-  encryptedColumnsMap: {},
 }))
 
-import { getPowerSyncDatabaseConfig, getPowerSyncOptions } from './database'
+const { getPowerSyncDatabaseConfig, getPowerSyncOptions } = await import('./database')
 
 describe('getPowerSyncDatabaseConfig', () => {
   it('returns default for web + Chrome', () => {
