@@ -6,8 +6,8 @@
 
 export class HttpError extends Error {
   response: Response
-  constructor(response: Response, message?: string) {
-    super(message ?? `Request failed with status ${response.status}`)
+  constructor(response: Response) {
+    super(`Request failed with status ${response.status}`)
     this.name = 'HttpError'
     this.response = response
   }
@@ -112,15 +112,8 @@ export const createClient = (config: HttpClientConfig = {}): HttpClient => {
     config.hooks?.beforeRequest?.forEach((hook) => hook(req))
 
     const responsePromise = fetchFn(req)
-      .then(async (response) => {
+      .then((response) => {
         if (!response.ok) {
-          const contentType = response.headers.get('content-type') ?? ''
-          if (contentType.includes('application/json')) {
-            const body = (await response.clone().json()) as { error?: { message?: string } } | null
-            if (body?.error?.message) {
-              throw new HttpError(response, body.error.message)
-            }
-          }
           throw new HttpError(response)
         }
         return response

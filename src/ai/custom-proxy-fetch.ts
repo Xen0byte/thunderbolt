@@ -10,6 +10,11 @@ type CreateCustomProxyFetchOpts = {
   upstreamAuth?: string
   /** Authenticated Thunderbolt backend client. */
   httpClient: HttpClient
+  /**
+   * Optional Tauri fetch override. Only used to inject a spy in tests.
+   * In production, left undefined so the runtime lazy-imports `@/lib/fetch`.
+   */
+  tauriFetch?: typeof fetch
 }
 
 /**
@@ -27,14 +32,14 @@ type CreateCustomProxyFetchOpts = {
  * and a `RequestInit` whose body is the JSON-encoded chat completion request.
  */
 export const createCustomProxyFetch = (opts: CreateCustomProxyFetchOpts): typeof fetch => {
-  const { baseURL, upstreamAuth, httpClient } = opts
+  const { baseURL, upstreamAuth, httpClient, tauriFetch } = opts
 
   const proxyFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     // Tauri path — delegate unchanged so Tauri native-fetch transport is preserved (US-003).
     // Lazy import avoids loading src/lib/fetch.ts (which calls getDb()) at module init time.
     if (isTauri()) {
-      const { fetch: tauriFetch } = await import('@/lib/fetch')
-      return tauriFetch(input, init)
+      const fn = tauriFetch ?? (await import('@/lib/fetch')).fetch
+      return fn(input, init)
     }
 
     // Localhost / loopback — CORS carve-out; backend cannot reach user's localhost anyway.

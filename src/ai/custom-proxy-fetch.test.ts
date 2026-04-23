@@ -3,11 +3,6 @@ import { createCustomProxyFetch } from './custom-proxy-fetch'
 import * as platformModule from '@/lib/platform'
 import { createMockHttpClient, createSpyHttpClient, jsonResponse } from '@/test-utils/http-client'
 
-// Mock @/lib/fetch so tests don't require a database instance.
-// The Tauri path lazy-imports this module; we provide a spy as the export.
-const tauriFetchSpy = mock(async () => new Response('tauri-response', { status: 200 }))
-mock.module('@/lib/fetch', () => ({ fetch: tauriFetchSpy, preconnect: () => Promise.resolve(false) }))
-
 const cloudUrl = 'https://animal.inference.thunderbolt.io/v1'
 const localUrl = 'http://localhost:11434/v1'
 const targetUrl = `${cloudUrl}/chat/completions`
@@ -37,11 +32,15 @@ describe('createCustomProxyFetch', () => {
   })
 
   describe('Tauri path (US-003 regression guard)', () => {
-    it('delegates to src/lib/fetch when isTauri() is true', async () => {
+    it('delegates to injected tauriFetch when isTauri() is true', async () => {
       isTauriSpy.mockReturnValue(true)
-      tauriFetchSpy.mockClear()
+      const tauriFetchSpy = mock(async () => new Response('tauri-response', { status: 200 }))
       const { httpClient, fetchSpy } = createSpyHttpClient()
-      const proxyFetch = createCustomProxyFetch({ baseURL: cloudUrl, httpClient })
+      const proxyFetch = createCustomProxyFetch({
+        baseURL: cloudUrl,
+        httpClient,
+        tauriFetch: tauriFetchSpy as unknown as typeof fetch,
+      })
 
       await proxyFetch(targetUrl, makeInit())
 

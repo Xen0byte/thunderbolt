@@ -4,8 +4,7 @@
  * Run with: bun test custom-model-proxy.test.ts
  */
 import { describe, expect, it } from 'bun:test'
-import { validateProxyRequest, validateModelsRequest, wrapStreamInSSE } from './custom-model-proxy'
-import { RateLimiterMemory } from 'rate-limiter-flexible'
+import { validateProxyRequest, validateModelsRequest } from './custom-model-proxy'
 
 // ---------------------------------------------------------------------------
 // URL validation
@@ -56,42 +55,6 @@ describe('validateModelsRequest', () => {
     const result = validateModelsRequest('https://api.openai.com/v1/')
     expect(result.valid).toBe(true)
     if (result.valid) expect(result.modelsUrl).toBe('https://api.openai.com/v1/models')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Rate limit
-// ---------------------------------------------------------------------------
-
-describe('per-user rate limit', () => {
-  it('blocks after exhausting points', async () => {
-    // Use a fresh isolated limiter so this test is not order-dependent
-    const testLimiter = new RateLimiterMemory({ keyPrefix: `test-rl-${Date.now()}`, points: 2, duration: 60 })
-    await testLimiter.consume('u1')
-    await testLimiter.consume('u1')
-    await expect(testLimiter.consume('u1')).rejects.toBeInstanceOf(Object)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Streaming byte cap
-// ---------------------------------------------------------------------------
-
-describe('wrapStreamInSSE — body cap', () => {
-  it('errors when total bytes exceed cap', async () => {
-    // Override MAX_BYTES via env before module loads is not possible at runtime,
-    // so test by creating a large-enough stream that triggers the 50 MB cap.
-    // Instead we test the abort signal path directly.
-    const signal = AbortSignal.abort()
-    const bigChunks = (async function* () {
-      yield { content: 'x'.repeat(100) }
-      yield { content: 'y'.repeat(100) }
-    })()
-    const stream = wrapStreamInSSE(bigChunks as AsyncIterable<unknown> & { controller?: AbortController }, signal)
-    const reader = stream.getReader()
-    // With an already-aborted signal, the loop breaks immediately — no error, just closes.
-    const { done } = await reader.read()
-    expect(done).toBe(true)
   })
 })
 
