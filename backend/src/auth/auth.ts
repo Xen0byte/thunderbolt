@@ -61,7 +61,7 @@ const buildSsoPlugins = () => {
               pkce: true,
               clientId: settings.oidcClientId,
               clientSecret: settings.oidcClientSecret,
-              discoveryEndpoint: `${settings.oidcIssuer}/.well-known/openid-configuration`,
+              discoveryEndpoint: settings.oidcDiscoveryUrl || `${settings.oidcIssuer}/.well-known/openid-configuration`,
               scopes: ['openid', 'profile', 'email'],
             },
           },
@@ -119,6 +119,15 @@ export const createAuth = (database: typeof DbType) => {
     )
   }
 
+  // The IdP is operator-controlled in self-hosted enterprise deployments, so we trust the
+  // 'sso' provider for account linking. Without this, Better Auth blocks linking an SSO
+  // account to an existing user record with the same email — causing the SSO callback to
+  // fail with "account not linked" for any user record that wasn't originally created via
+  // the same SSO flow. Replaces the deprecated `trustEmailVerified` SSO plugin option, and
+  // makes trust explicit in operator config rather than depending on the IdP's
+  // `email_verified` claim.
+  const ssoEnabled = settings.authMode === 'oidc' || settings.authMode === 'saml'
+
   return betterAuth({
     basePath: '/v1/api/auth',
     database: drizzleAdapter(database, {
@@ -126,6 +135,13 @@ export const createAuth = (database: typeof DbType) => {
       schema,
     }),
     trustedOrigins,
+    ...(ssoEnabled && {
+      account: {
+        accountLinking: {
+          trustedProviders: ['sso'],
+        },
+      },
+    }),
     // NOTE: Uses in-memory storage by default — not shared across instances in
     // horizontally-scaled deployments. Provides single-instance defence only.
     // TODO(THU-113): Replace with proof-of-work challenge (ALTCHA) for distributed protection.
