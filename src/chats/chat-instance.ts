@@ -82,6 +82,10 @@ export type CreateChatInstanceDeps = {
   getAllSkills?: typeof defaultGetAllSkills
 }
 
+export type AgentRoutingState = {
+  regenerationRevision?: number
+}
+
 /**
  * Build the `customFetch` the AI SDK's transport invokes for every
  * `chat.sendMessage(...)`. Each send routes to the GLOBAL per-agent adapter
@@ -108,6 +112,7 @@ export const createAgentRoutingFetch = (
   httpClient: HttpClient,
   getProxyFetch: () => FetchFn,
   deps: CreateChatInstanceDeps = {},
+  routingState: AgentRoutingState = {},
 ) => {
   const getOrConnectAdapter = deps.getOrConnectAdapter ?? defaultGetOrConnectAdapter
   const updateChatThread = deps.updateChatThread ?? defaultUpdateChatThread
@@ -170,11 +175,13 @@ export const createAgentRoutingFetch = (
       const requestBody = JSON.parse(init.body as string) as { messages: ThunderboltUIMessage[] }
       await saveMessages({ id, messages: requestBody.messages })
 
+      // Persist by `id`, not `chatThread.id`: on a brand-new chat the session's
+      // `chatThread` snapshot is still `null` here (PowerSync hasn't re-hydrated
+      // it yet), but `saveMessages` above just created the `chat_threads` row —
+      // so keying off `chatThread` would silently drop the fresh ACP id and
+      // break resume/load on the next reconnect. `id` is that same row's id.
       const persistAcpSessionId = async (newSessionId: string): Promise<void> => {
-        if (!chatThread) {
-          return
-        }
-        await updateChatThread(getDb(), chatThread.id, { acpSessionId: newSessionId })
+        await updateChatThread(getDb(), id, { acpSessionId: newSessionId })
       }
 
       // Surface `connecting` only when routing to a different agent than this
@@ -216,6 +223,7 @@ export const createAgentRoutingFetch = (
         reconnectClient,
         httpClient,
         getProxyFetch,
+        regenerationRevision: routingState.regenerationRevision ?? 0,
         skillInstructions,
         onAcpSessionId: persistAcpSessionId,
         requestPermission: (request) => requestPermissionViaStore(id, request),
@@ -236,7 +244,8 @@ export const createChatInstance = (
   getProxyFetch: () => FetchFn,
   deps: CreateChatInstanceDeps = {},
 ) => {
-  const customFetch = createAgentRoutingFetch(id, saveMessages, httpClient, getProxyFetch, deps)
+  const routingState: AgentRoutingState = { regenerationRevision: 0 }
+  const customFetch = createAgentRoutingFetch(id, saveMessages, httpClient, getProxyFetch, deps, routingState)
 
   let retryCount = 0
   let retryTimeout: ReturnType<typeof setTimeout> | null = null
@@ -344,7 +353,7 @@ export const createChatInstance = (
             useChatStore.getState().updateSession(id, { retryCount: 0, retriesExhausted: false })
             return
           }
-          originalRegenerate().catch((err) => {
+          regenerateResponse().catch((err) => {
             console.error('Auto-retry failed:', err)
             // Don't set retriesExhausted here - let onFinish handle retry logic.
             // When originalRegenerate() fails, onFinish will be called again and will
@@ -369,6 +378,13 @@ export const createChatInstance = (
 
   const originalRegenerate = instance.regenerate.bind(instance)
 
+  /** Mark and start one response regeneration so persistent agents rebuild from
+   *  the request transcript while ordinary sends keep their live session. */
+  const regenerateResponse = (): Promise<void> => {
+    routingState.regenerationRevision = (routingState.regenerationRevision ?? 0) + 1
+    return originalRegenerate()
+  }
+
   // Reset retry count on manual regenerate (Retry button) so auto-retries work again
   instance.regenerate = async function () {
     if (retryTimeout) {
@@ -378,7 +394,7 @@ export const createChatInstance = (
     retryCount = 0
     lastError = null
     useChatStore.getState().updateSession(id, { retryCount: 0, retriesExhausted: false })
-    return originalRegenerate()
+    return regenerateResponse()
   }
 
   const originalSendMessage = instance.sendMessage.bind(instance)

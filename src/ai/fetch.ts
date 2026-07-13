@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { createPrompt } from '@/ai/prompt'
+import { createPromptParts } from '@/ai/prompt'
 import {
   buildStepOverrides,
   extractTextFromMessages,
@@ -25,7 +25,7 @@ import { getAuthToken } from '@/lib/auth-token'
 import { fetch as baseFetch } from '@/lib/fetch'
 import type { FetchFn } from '@/lib/proxy-fetch'
 import { createToolset, getAvailableTools, type ToolCallCache } from '@/lib/tools'
-import type { Model, ThunderboltUIMessage, UIMessageMetadata } from '@/types'
+import type { Model, ModelProfile, ThunderboltUIMessage, UIMessageMetadata } from '@/types'
 import type { SourceMetadata } from '@/types/source'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
@@ -296,6 +296,72 @@ export const mergeMcpTools = async (
   }
 }
 
+/** Raw OpenAI-compatible connection for a model: the three knobs every
+ *  OpenAI-wire provider construction needs ({@link createModel} for the legacy
+ *  Vercel SDK, the in-browser Pi harness for the built-in agent). `fetch` is the
+ *  provider-specific app fetch — the universal proxy fetch for
+ *  `openai`/`custom`/`openrouter`, or the SSO-aware fetch for `thunderbolt`. */
+export type OpenAiCompatConnection = {
+  baseURL: string
+  apiKey: string
+  fetch: FetchFn
+}
+
+/**
+ * Resolve the raw OpenAI-compatible connection for a model, mirroring the
+ * per-provider construction in {@link createModel}. Returns `null` for providers
+ * the OpenAI wire doesn't serve (`anthropic` has its own SDK; `tinfoil` needs the
+ * enclave client) or when required config is missing (no api key / url) — callers
+ * fall back to the legacy pipeline rather than crash.
+ *
+ * Centralizes the intricate `thunderbolt` SSO-fetch logic so the legacy and Pi
+ * paths can't drift.
+ *
+ * @param modelConfig - the model whose connection to resolve
+ * @param getProxyFetch - lazily resolved universal proxy fetch
+ * @returns the connection, or `null` when unsupported/unconfigured
+ */
+export const resolveOpenAiCompatConnection = (
+  modelConfig: Model,
+  getProxyFetch: () => FetchFn,
+): OpenAiCompatConnection | null => {
+  switch (modelConfig.provider) {
+    case 'thunderbolt': {
+      const cloudUrl = getLocalSetting('cloudUrl')
+      const token = getAuthToken() || 'thunderbolt'
+      // See the `thunderbolt` case in createModel for the SSO/token rationale:
+      // SSO web has no bearer token (cookie auth), so strip the placeholder
+      // Authorization and send credentials; Tauri SSO keeps its real bearer.
+      const sso = isSsoMode()
+      const hasRealToken = Boolean(getAuthToken())
+      const ssoFetch: typeof fetch = Object.assign(
+        (input: RequestInfo | URL, init?: RequestInit) => {
+          const headers = new Headers(init?.headers)
+          headers.delete('authorization')
+          return fetch(input, { ...init, headers, credentials: 'include' })
+        },
+        { preconnect: fetch.preconnect },
+      )
+      const providerFetch: FetchFn = sso && !hasRealToken ? ssoFetch : fetch
+      return { baseURL: cloudUrl, apiKey: token, fetch: providerFetch }
+    }
+    case 'openai':
+      return modelConfig.apiKey
+        ? { baseURL: 'https://api.openai.com/v1', apiKey: modelConfig.apiKey, fetch: getProxyFetch() }
+        : null
+    case 'custom':
+      return modelConfig.url
+        ? { baseURL: modelConfig.url, apiKey: modelConfig.apiKey ?? '', fetch: getProxyFetch() }
+        : null
+    case 'openrouter':
+      return modelConfig.apiKey
+        ? { baseURL: 'https://openrouter.ai/api/v1', apiKey: modelConfig.apiKey, fetch: getProxyFetch() }
+        : null
+    default:
+      return null
+  }
+}
+
 export const createModel = async (modelConfig: Model, getProxyFetch: () => FetchFn) => {
   // The thunderbolt provider goes through its own SSO-aware fetch below; all
   // other providers route through the universal proxy. We resolve the proxy
@@ -303,8 +369,6 @@ export const createModel = async (modelConfig: Model, getProxyFetch: () => Fetch
   // (e.g. cloudUrl, proxy_enabled toggle) is picked up.
   switch (modelConfig.provider) {
     case 'thunderbolt': {
-      const cloudUrl = getLocalSetting('cloudUrl')
-      const token = getAuthToken() || 'thunderbolt'
       // SSO web flow authenticates via session cookies — the SSO callback is a
       // browser redirect, not an XHR, so `set-auth-token` never reaches the
       // client and getAuthToken() returns null.  The AI SDKs require an apiKey
@@ -316,25 +380,23 @@ export const createModel = async (modelConfig: Model, getProxyFetch: () => Fetch
       // Tauri desktop SSO uses a loopback server that returns a real bearer
       // token (stored via setAuthToken).  In that case we must keep the
       // Authorization header because WKWebView can't send cross-origin cookies.
-      const sso = isSsoMode()
-      const hasRealToken = Boolean(getAuthToken())
-      const ssoFetch = (input: RequestInfo | URL, init?: RequestInit) => {
-        const headers = new Headers(init?.headers)
-        headers.delete('authorization')
-        return fetch(input, { ...init, headers, credentials: 'include' })
+      // The connection (baseURL/apiKey/SSO-fetch) lives in
+      // resolveOpenAiCompatConnection so the Pi harness reuses the same logic.
+      const conn = resolveOpenAiCompatConnection(modelConfig, getProxyFetch)
+      if (!conn) {
+        throw new Error('No connection resolved for thunderbolt provider')
       }
-      ssoFetch.preconnect = fetch.preconnect
-      const providerFetch: typeof fetch = sso && !hasRealToken ? ssoFetch : fetch
+      const { baseURL, apiKey, fetch: providerFetch } = conn
       // OpenAI-vendor thunderbolt models use createOpenAI with .chat() to force Chat Completions API
       // (AI SDK 5 defaults createOpenAI to Responses API which our backend doesn't support)
       if (modelConfig.vendor === 'openai') {
-        const provider = createOpenAI({ baseURL: cloudUrl, apiKey: token, fetch: providerFetch })
+        const provider = createOpenAI({ baseURL, apiKey, fetch: providerFetch })
         return provider.chat(modelConfig.model)
       }
       const provider = createOpenAICompatible({
         name: 'thunderbolt',
-        baseURL: cloudUrl,
-        apiKey: token,
+        baseURL,
+        apiKey,
         fetch: providerFetch,
       })
       return provider(modelConfig.model)
@@ -352,38 +414,41 @@ export const createModel = async (modelConfig: Model, getProxyFetch: () => Fetch
       return anthropic(modelConfig.model)
     }
     case 'openai': {
-      if (!modelConfig.apiKey) {
+      const conn = resolveOpenAiCompatConnection(modelConfig, getProxyFetch)
+      if (!conn) {
         throw new Error('No API key provided')
       }
       const openai = createOpenAI({
-        apiKey: modelConfig.apiKey,
-        fetch: getProxyFetch(),
+        apiKey: conn.apiKey,
+        fetch: conn.fetch,
       })
       return openai(modelConfig.model)
     }
     case 'custom': {
-      if (!modelConfig.url) {
+      const conn = resolveOpenAiCompatConnection(modelConfig, getProxyFetch)
+      if (!conn) {
         throw new Error('No URL provided for custom provider')
       }
       const openaiCompatible = createOpenAICompatible({
         name: 'custom',
-        baseURL: modelConfig.url,
-        apiKey: modelConfig.apiKey || undefined,
-        fetch: getProxyFetch(),
+        baseURL: conn.baseURL,
+        apiKey: conn.apiKey || undefined,
+        fetch: conn.fetch,
       })
       return openaiCompatible(modelConfig.model)
     }
     case 'openrouter': {
-      if (!modelConfig.apiKey) {
+      const conn = resolveOpenAiCompatConnection(modelConfig, getProxyFetch)
+      if (!conn) {
         throw new Error('No API key provided')
       }
       // Using OpenAI-compatible approach until @openrouter/ai-sdk-provider supports Vercel AI SDK v5
       // https://github.com/OpenRouterTeam/ai-sdk-provider/pull/77
       const openrouter = createOpenAICompatible({
         name: 'openrouter',
-        baseURL: 'https://openrouter.ai/api/v1',
-        apiKey: modelConfig.apiKey,
-        fetch: getProxyFetch(),
+        baseURL: conn.baseURL,
+        apiKey: conn.apiKey,
+        fetch: conn.fetch,
       })
       return openrouter(modelConfig.model)
     }
@@ -458,6 +523,106 @@ export const createModel = async (modelConfig: Model, getProxyFetch: () => Fetch
   }
 }
 
+export type PreparedAiRequestConfig = {
+  readonly model: Model
+  readonly profile: ModelProfile | null
+  readonly supportsTools: boolean
+  readonly sourceCollector: SourceMetadata[]
+  readonly toolset: Record<string, Tool>
+  readonly mcpToolsMetadata: UIMessageMetadata['mcpTools']
+  readonly stableSystemPrompt: string
+  readonly systemPrompt: string
+}
+
+export type PrepareAiRequestConfigOptions = {
+  readonly modelId: string
+  readonly modeSystemPrompt?: string
+  readonly modeName?: string
+  readonly mcpClients?: NamedMCPClient[]
+  readonly reconnectClient?: ReconnectClient
+  readonly httpClient: HttpClient
+}
+
+/** Load model/profile/settings and build one send's app + MCP tools and prompt. */
+export const prepareAiRequestConfig = async ({
+  modelId,
+  modeSystemPrompt,
+  modeName,
+  mcpClients = [],
+  reconnectClient = async () => null,
+  httpClient,
+}: PrepareAiRequestConfigOptions): Promise<PreparedAiRequestConfig> => {
+  const db = getDb()
+  const settings = await getSettings(db, {
+    preferred_name: '',
+    location_name: '',
+    location_lat: '',
+    location_lng: '',
+    distance_unit: 'imperial',
+    temperature_unit: 'f',
+    date_format: 'MM/DD/YYYY',
+    time_format: '12h',
+    currency: 'USD',
+    integrations_do_not_ask_again: false,
+    experimental_feature_tasks: false,
+    integrations_pro_is_enabled: false,
+  })
+  const integrationStatus = await getIntegrationStatus(db)
+  const model = await getModel(db, modelId)
+  if (!model) {
+    throw new Error('Model not found')
+  }
+  const profile = await getModelProfile(db, modelId)
+  const supportsTools = model.toolUsage !== 0
+  const sourceCollector: SourceMetadata[] = []
+  const toolCallCache: ToolCallCache = new Map()
+  const availableTools = supportsTools
+    ? await getAvailableTools(httpClient, sourceCollector, { settings, integrationStatus })
+    : []
+  const appToolset = createToolset(availableTools, toolCallCache)
+  const merged = supportsTools
+    ? await mergeMcpTools(appToolset, mcpClients, reconnectClient)
+    : { toolset: appToolset, summary: undefined, mcpTools: undefined }
+
+  const integrationStatuses = [
+    integrationStatus.googleConnected && !integrationStatus.googleEnabled ? 'GOOGLE_DISABLED' : null,
+    integrationStatus.microsoftConnected && !integrationStatus.microsoftEnabled ? 'MICROSOFT_DISABLED' : null,
+    settings.integrationsDoNotAskAgain ? 'PROMPTS_DISABLED' : null,
+  ].filter((status): status is string => status !== null)
+  const prompt = createPromptParts({
+    modelName: model.name,
+    profile,
+    modeName: modeName ?? null,
+    preferredName: settings.preferredName,
+    location: {
+      name: settings.locationName,
+      lat: settings.locationLat ? parseFloat(settings.locationLat) : undefined,
+      lng: settings.locationLng ? parseFloat(settings.locationLng) : undefined,
+    },
+    localization: {
+      distanceUnit: settings.distanceUnit,
+      temperatureUnit: settings.temperatureUnit,
+      dateFormat: settings.dateFormat,
+      timeFormat: settings.timeFormat,
+      currency: settings.currency,
+    },
+    integrationStatus: integrationStatuses.length > 0 ? integrationStatuses.join(', ') : 'READY',
+    modeSystemPrompt,
+    mcpServersSummary: merged.summary,
+  })
+
+  return {
+    model,
+    profile,
+    supportsTools,
+    sourceCollector,
+    toolset: merged.toolset,
+    mcpToolsMetadata: merged.mcpTools,
+    stableSystemPrompt: prompt.stablePrompt,
+    systemPrompt: prompt.fullPrompt,
+  }
+}
+
 export const aiFetchStreamingResponse = async ({
   init,
   modelId,
@@ -478,94 +643,18 @@ export const aiFetchStreamingResponse = async ({
   // reach this function the user turn is already persisted.
 
   const db = getDb()
-
-  // Fetch all settings in a single query (returns camelCase by default)
-  const settings = await getSettings(db, {
-    preferred_name: '',
-    location_name: '',
-    location_lat: '',
-    location_lng: '',
-    distance_unit: 'imperial',
-    temperature_unit: 'f',
-    date_format: 'MM/DD/YYYY',
-    time_format: '12h',
-    currency: 'USD',
-    integrations_do_not_ask_again: false,
-    // Also fetch the tool-availability gates here so `getAvailableTools` can
-    // reuse them (via ToolAvailabilityContext) instead of re-reading settings.
-    experimental_feature_tasks: false,
-    integrations_pro_is_enabled: false,
-  })
-
-  const integrationStatus = await getIntegrationStatus(db)
-
-  const model = await getModel(db, modelId)
-
-  if (!model) {
-    throw new Error('Model not found')
-  }
-
-  const profile = await getModelProfile(db, modelId)
-
-  const supportsTools = model.toolUsage !== 0
-
-  const sourceCollector: SourceMetadata[] = []
-  // Dedupe identical read-only tool calls within this send (same lifetime as
-  // sourceCollector — one request, no cross-turn state).
-  const toolCallCache: ToolCallCache = new Map()
-
-  let toolset: Record<string, Tool> = {}
-  let mcpServersSummary: string | undefined
-  let mcpToolsMetadata: UIMessageMetadata['mcpTools']
-  if (supportsTools) {
-    const availableTools = await getAvailableTools(httpClient, sourceCollector, { settings, integrationStatus })
-    toolset = createToolset(availableTools, toolCallCache)
-
-    const merged = await mergeMcpTools(toolset, mcpClients ?? [], reconnectClient ?? (async () => null))
-    mcpServersSummary = merged.summary
-    mcpToolsMetadata = merged.mcpTools
-  } else {
+  const { model, profile, supportsTools, sourceCollector, toolset, mcpToolsMetadata, systemPrompt } =
+    await prepareAiRequestConfig({
+      modelId,
+      modeSystemPrompt,
+      modeName,
+      mcpClients,
+      reconnectClient,
+      httpClient,
+    })
+  if (!supportsTools) {
     console.log('Model does not support tools, skipping tool setup')
   }
-
-  // Compute integration status for the model (can return multiple statuses)
-  const computeIntegrationStatusLabel = (): string => {
-    const statuses: string[] = []
-
-    if (integrationStatus.googleConnected && !integrationStatus.googleEnabled) {
-      statuses.push('GOOGLE_DISABLED')
-    }
-    if (integrationStatus.microsoftConnected && !integrationStatus.microsoftEnabled) {
-      statuses.push('MICROSOFT_DISABLED')
-    }
-    if (settings.integrationsDoNotAskAgain) {
-      statuses.push('PROMPTS_DISABLED')
-    }
-
-    return statuses.length > 0 ? statuses.join(', ') : 'READY'
-  }
-
-  const systemPrompt = createPrompt({
-    modelName: model.name,
-    profile,
-    modeName: modeName ?? null,
-    preferredName: settings.preferredName,
-    location: {
-      name: settings.locationName,
-      lat: settings.locationLat ? parseFloat(settings.locationLat) : undefined,
-      lng: settings.locationLng ? parseFloat(settings.locationLng) : undefined,
-    },
-    localization: {
-      distanceUnit: settings.distanceUnit,
-      temperatureUnit: settings.temperatureUnit,
-      dateFormat: settings.dateFormat,
-      timeFormat: settings.timeFormat,
-      currency: settings.currency,
-    },
-    integrationStatus: computeIntegrationStatusLabel(),
-    modeSystemPrompt,
-    mcpServersSummary,
-  })
 
   const activeNudges = getNudgeMessagesFromProfile(profile, modeName)
 
